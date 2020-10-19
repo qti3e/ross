@@ -34,6 +34,18 @@ export function stddev(numbers) {
   );
 }
 
+/**
+ * Compute the `mid` of the given list of numbers.
+ * @param {number[]} numbers The array of numbers.
+ */
+export function mid(numbers) {
+  if (numbers.length === 0) return NaN;
+  const clone = [...numbers].sort();
+  if (clone.length % 2 == 1) return clone[(clone.length - 1) / 2];
+  const s = clone.length / 2;
+  return (clone[s - 1] + clone[s]) / 2;
+}
+
 /** @type {Uint32Array} */
 let cryptoRndCache;
 /** @type {number} */

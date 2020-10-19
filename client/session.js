@@ -46,6 +46,8 @@ export class Session extends EventTarget {
       this.clockSynInProgress = true;
       const offset = await syncClock(this.connection);
       this.clockOffset = offset;
+    } catch (e) {
+      // Ignore clock sync failures.
     } finally {
       this.clockSynInProgress = false;
     }
