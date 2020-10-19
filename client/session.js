@@ -126,11 +126,117 @@ export class Session extends EventTarget {
     // sync the clock, so just ignore it here, this is handled in `clock.js`.
     if (data.clockSync) return;
 
-    // TODO(nima) Handle the actions sent by the server.
+    // TODO(nima) Handle the actions sent by the server, remember that the
+    // server is our source of truth and client always does what the server
+    // says.
     switch (data.action) {
       case "CREATE":
       case "DELETE":
       case "CAS":
+        throw new Error("unimplemented.");
+      // This action is sent by the server at the beginning of the sync.
+      // It contains all of the objects in the database, all of the data
+      // (if any) must be deleted and be replaced by the data provided
+      // in this action.
+      case "LOAD":
+        throw new Error("unimplemented.");
     }
+  }
+
+  /**
+   * Perform the given action on the server side, this function should not
+   * impact the current instance in anyways.
+   * @param {Object} action
+   * @private
+   */
+  async perform(action) {
+    if (!this.connection.isOpen()) {
+      // TODO(qti3e,nima) Currently this function assumes that the connection
+      // is always open, but it might actually be closed, in that case we need
+      // to store this actions in some sort of stack, and track our changes
+      // using some sort of ds, so that once the connection is established again
+      // we can detect conflicts in the sync process in semi-linear time.
+      throw new Error("unimplemented.");
+    }
+    this.connection.send(action);
+  }
+
+  /**
+   * Create an object with the information provided in this instance,
+   * this is a client side function and only affects the client side.
+   * @private
+   */
+  doCreate(instance, uuid, data) {
+    const object = Object.freeze({
+      _instance: instance,
+      _uuid: uuid,
+      ...data
+    });
+
+    // TODO(nima) This object needs to be stored somewhere.
+
+    this.dispatchEvent(
+      new CustomEvent("object-created", {
+        detail: object
+      })
+    );
+  }
+
+  /**
+   * Create a new object in the current session.
+   *
+   * @param {string} instance Name of the object instance.
+   * @param {Object} data The values of the object.
+   */
+  create(instance, data) {
+    const uuid = this.uuid();
+    this.doCreate(instance, uuid, data);
+    return this.perform({
+      action: "CREATE",
+      instance,
+      uuid,
+      data
+    });
+  }
+
+  /**
+   * Delete an object from this session on the client side, does not affect the
+   * server.
+   * @param {string} objUUID The uuid of the object that is subject to this action.
+   * @private
+   */
+  doDelete(objUUID) {
+    // TODO(nima) Delete the object and dispatch an event named "object-deleted".
+    throw new Error("unimplemented.");
+  }
+
+  /**
+   * Delete
+   * @param {Object} object An object that was previously returned by this session.
+   */
+  delete(object) {
+    this.doDelete(object._uuid);
+    // TODO(nima) Perform the action on the server side, use `this.perform`
+    // just like in `create()`
+    throw new Error("unimplemented.");
+  }
+
+  /**
+   * Set the value of the given field in the given object, this function
+   * will perform a CAS action on the server side, returns the newly updated
+   * object and dispatch an `object-mutated` event.
+   * @param {Object} object
+   * @param {string} field
+   * @param {any} nextValue
+   */
+  set(object, field, nextValue) {
+    throw new Error("unimplemented.");
+  }
+
+  /**
+   * Return all of the objects in this session.
+   */
+  getData() {
+    // TODO(nima)
   }
 }
