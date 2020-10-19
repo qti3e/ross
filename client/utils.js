@@ -30,8 +30,7 @@ export function stddev(numbers) {
   if (numbers.length === 0) return 0;
   const avg = mean(numbers);
   return Math.sqrt(
-    numbers.map((x) => (x - avg) ** 2).reduce((a, b) => a + b, 0) /
-      numbers.length
+    numbers.map(x => (x - avg) ** 2).reduce((a, b) => a + b, 0) / numbers.length
   );
 }
 
@@ -55,7 +54,7 @@ export function rnd32() {
     cryptoRndNextIndex = 1;
     index = 0;
     const crypto = new Crypto();
-    crypto.getRandomValues(cryptoRndCache)
+    crypto.getRandomValues(cryptoRndCache);
   }
 
   return cryptoRndCache[index];

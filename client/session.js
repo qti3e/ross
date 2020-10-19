@@ -25,6 +25,7 @@ export class Session extends EventTarget {
    * @param {string} serverURL The ws url of the server which we should connect.
    */
   constructor(serverURL) {
+    super();
     this.connection = new Connection(serverURL);
     this.handleMessage = this.handleMessage.bind(this);
     this.connection.addEventListener("message", this.handleMessage);
@@ -32,12 +33,6 @@ export class Session extends EventTarget {
     this.connection.addEventListener("opened", this.handleOpened);
     this.handleClosed = this.handleClosed.bind(this);
     this.connection.addEventListener("closed", this.handleClosed);
-
-    // Sync the clock now and every 15 seconds from now.
-    this.syncClock();
-    this.clockIntervalId = setTimeInterval(() => {
-      this.syncClock();
-    }, 15e3);
   }
 
   /**
@@ -47,9 +42,13 @@ export class Session extends EventTarget {
   async syncClock() {
     if (!this.connection.isOpen()) return;
     if (this.clockSynInProgress === true) return;
-    this.clockSynInProgress = true;
-    this.clockOffset = await syncClock(this.connection);
-    this.clockSynInProgress = false;
+    try {
+      this.clockSynInProgress = true;
+      const offset = await syncClock(this.connection);
+      this.clockOffset = offset;
+    } finally {
+      this.clockSynInProgress = false;
+    }
   }
 
   /**
@@ -91,19 +90,25 @@ export class Session extends EventTarget {
    */
   close() {
     this.connection.close();
-    clearInterval(this.clockIntervalId);
   }
 
   /**
    * Handle the `opened` event sent from the connection.
    */
-  handleOpened() {}
+  handleOpened() {
+    // Sync the clock now and every 15 seconds from now.
+    this.syncClock();
+    this.clockIntervalId = setTimeInterval(() => {
+      this.syncClock();
+    }, 15e3);
+  }
 
   /**
    * Handle the `closed` event sent from the connection.
    */
   handleClosed() {
     this.hostID = undefined;
+    clearInterval(this.clockIntervalId);
   }
 
   /**

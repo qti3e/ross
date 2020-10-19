@@ -1,4 +1,4 @@
-import { createDeferred } from './utils';
+import { createDeferred } from "./utils";
 
 /**
  * A WS client that handles connection errors properly.
@@ -181,7 +181,7 @@ export class Connection extends EventTarget {
     } catch (e) {
       this.dispatchEvent(
         new CustomEvent("parse-error", {
-          detail: event.data,
+          detail: event.data
         })
       );
     }
