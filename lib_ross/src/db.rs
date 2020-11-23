@@ -18,8 +18,8 @@ impl DB {
 
     /// Perform the given transaction on the database, returns true/false indicating
     /// the success or failure of the commit.
-    pub fn perform(&mut self, batch: Batch) -> bool {
-        self.db.write(batch.finalize()).is_ok()
+    pub fn perform(&mut self, batch: Batch) -> Result<(), Error> {
+        self.db.write(batch.finalize())
     }
 
     /// Return the data associated with the given key.

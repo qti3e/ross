@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use sha1::{Digest, Sha1};
 use std::fmt::Write;
 
-#[derive(Debug, Serialize, Deserialize, Ord, PartialOrd, Eq, PartialEq, Hash)]
+#[derive(Debug, Serialize, Deserialize, Ord, PartialOrd, Eq, PartialEq, Hash, Clone)]
 pub struct CommitIdentifier {
     pub project: Hash16,
     pub hash: Hash20,

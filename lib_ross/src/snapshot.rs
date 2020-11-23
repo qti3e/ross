@@ -83,3 +83,9 @@ impl Snapshot {
         }
     }
 }
+
+impl Default for Snapshot {
+    fn default() -> Self {
+        Snapshot(RedBlackTreeMapSync::new_sync())
+    }
+}

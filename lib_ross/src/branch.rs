@@ -26,7 +26,7 @@ pub enum BranchStatus {
 pub struct BranchInfo {
     pub status: BranchStatus,
     pub head: Hash20,
-    pub branch_root: Option<Hash20>,
+    pub fork_root: Option<Hash20>,
     pub date: Timestamp,
     pub user: UserID,
     pub name: String,
