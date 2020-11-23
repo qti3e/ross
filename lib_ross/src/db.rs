@@ -123,12 +123,12 @@ impl Batch {
 /// This module contains all of the keys and values that can be used in
 /// our rocksdb instance.
 /// We have these key groups:
-/// 1. Branches: Project(uuid) -> Vec<BranchUUID>
+/// 1. Branches: Repository(uuid) -> Vec<BranchUUID>
 /// 2. BranchInfo: Branch(uuid) -> BranchInfo
 /// 3. LiveChange: Branch(uuid) -> Vec<Transaction>
 /// 4. CommitInfo: Commit(hash) -> CommitInfo
 /// 5. Snapshot: Commit(hash) -> Snapshot
-/// 6. Log: Project(uuid) -> Vec<Log>
+/// 6. Log: Repository(uuid) -> Vec<Log>
 pub mod data {
     use crate::action::Transaction;
     use crate::branch::{BranchIdentifier, BranchInfo};
@@ -187,13 +187,13 @@ pub mod data {
     }
 
     impl BranchInfoKey {
-        pub fn all(project: Hash16) -> (Self, Self) {
+        pub fn all(repository: Hash16) -> (Self, Self) {
             let min = BranchIdentifier {
-                project,
+                repository,
                 uuid: Hash16::MIN,
             };
             let max = BranchIdentifier {
-                project,
+                repository,
                 uuid: Hash16::MAX,
             };
             (Self(min), Self(max))
@@ -220,13 +220,13 @@ pub mod data {
     impl DBKeyWithAppend<LiveChangesAppendItem> for LiveChangesKey {}
 
     impl LiveChangesKey {
-        pub fn all(project: Hash16) -> (Self, Self) {
+        pub fn all(repository: Hash16) -> (Self, Self) {
             let min = BranchIdentifier {
-                project,
+                repository,
                 uuid: Hash16::MIN,
             };
             let max = BranchIdentifier {
-                project,
+                repository,
                 uuid: Hash16::MAX,
             };
             (Self(min), Self(max))
@@ -248,13 +248,13 @@ pub mod data {
     }
 
     impl CommitInfoKey {
-        pub fn all(project: Hash16) -> (Self, Self) {
+        pub fn all(repository: Hash16) -> (Self, Self) {
             let min = CommitIdentifier {
-                project,
+                repository,
                 hash: Hash20::MIN,
             };
             let max = CommitIdentifier {
-                project,
+                repository,
                 hash: Hash20::MAX,
             };
             (Self(min), Self(max))
@@ -275,13 +275,13 @@ pub mod data {
     }
 
     impl SnapshotKey {
-        pub fn all(project: Hash16) -> (Self, Self) {
+        pub fn all(repository: Hash16) -> (Self, Self) {
             let min = CommitIdentifier {
-                project,
+                repository,
                 hash: Hash20::MIN,
             };
             let max = CommitIdentifier {
-                project,
+                repository,
                 hash: Hash20::MAX,
             };
             (Self(min), Self(max))

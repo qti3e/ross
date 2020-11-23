@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct BranchIdentifier {
-    pub project: Hash16,
+    pub repository: Hash16,
     pub uuid: Hash16,
 }
 

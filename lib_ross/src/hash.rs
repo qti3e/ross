@@ -69,7 +69,7 @@ impl std::fmt::Debug for Hash16 {
 /// deserialized using bincode, to use JSON one must first convert this to an
 /// string and then perform the serialization.
 ///
-/// 16 bytes can be used to store SHA-1.
+/// 20 bytes can be used to store SHA-1.
 #[derive(Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize, Hash, Copy, Clone)]
 pub struct Hash20([u8; 20]);
 

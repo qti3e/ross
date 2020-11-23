@@ -7,7 +7,7 @@ use std::fmt::Write;
 
 #[derive(Debug, Serialize, Deserialize, Ord, PartialOrd, Eq, PartialEq, Hash, Clone)]
 pub struct CommitIdentifier {
-    pub project: Hash16,
+    pub repository: Hash16,
     pub hash: Hash20,
 }
 

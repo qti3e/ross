@@ -1,6 +1,6 @@
-use crate::branch::BranchIdentifier;
+use crate::branch::{BranchIdentifier, BranchInfo};
 use crate::commit::CommitIdentifier;
-use crate::db::{data as D, DBSync, DB};
+use crate::db::{data as D, Batch, DBSync, DB};
 use crate::error::Result;
 use crate::session::Session;
 use crate::snapshot::Snapshot;
@@ -40,6 +40,17 @@ impl Context {
 
         self.snapshot_cache.set(commit, snapshot.clone());
         Ok(snapshot)
+    }
+
+    /// Create a new branch in a repository with the given information.
+    pub fn create_branch(&self, id: BranchIdentifier, info: BranchInfo) -> Result<()> {
+        let mut batch = Batch::new();
+        batch.append(
+            D::BranchesKey(id.repository),
+            D::BranchesAppendItem(id.uuid),
+        );
+        batch.put(D::BranchInfoKey(id), &D::BranchInfoValue(info));
+        self.db.write()?.perform(batch)
     }
 }
 
