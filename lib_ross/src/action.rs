@@ -43,5 +43,5 @@ pub struct Transaction {
     /// library can have named transactions, like `createUser`, this value can
     /// be used to assign a unique id to each named action and then be used to
     /// format the transaction.
-    pub action: Option<u16>
+    pub action: Option<u16>,
 }
