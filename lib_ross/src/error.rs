@@ -23,8 +23,8 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Error::DBError(e) => write!(f, "RocksDB error: {}", e),
-            Error::AcquireWriteLock => write!(f, "Could not acquire the write lock to DB."),
-            Error::AcquireReadLock => write!(f, "Could not acquire the read lock to DB."),
+            Error::AcquireWriteLock => write!(f, "Could not acquire the write lock."),
+            Error::AcquireReadLock => write!(f, "Could not acquire the read lock."),
             Error::AcquireLock => write!(f, "Could not acquire a lock."),
         }
     }

@@ -1,3 +1,6 @@
+#[macro_use]
+mod macros;
+
 pub mod action;
 pub mod branch;
 pub mod commit;

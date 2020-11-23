@@ -1,26 +1,8 @@
 use crate::error::{Error, Result};
-use crossbeam::sync::{ShardedLock, ShardedLockReadGuard, ShardedLockWriteGuard};
+use crate::sync;
 use rocksdb;
-use std::sync::Arc;
 
-#[derive(Clone)]
-pub struct DBSync(Arc<ShardedLock<DB>>);
-
-impl DBSync {
-    pub fn new(db: DB) -> Self {
-        DBSync(Arc::new(ShardedLock::new(db)))
-    }
-
-    #[inline(always)]
-    pub fn read(&self) -> Result<ShardedLockReadGuard<DB>> {
-        self.0.read().map_err(|_| Error::AcquireReadLock)
-    }
-
-    #[inline(always)]
-    pub fn write(&self) -> Result<ShardedLockWriteGuard<DB>> {
-        self.0.write().map_err(|_| Error::AcquireWriteLock)
-    }
-}
+sync!(sync DBSync(DB) {});
 
 /// A typespace layer on the top of rocksdb.
 pub struct DB {

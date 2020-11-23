@@ -2,16 +2,18 @@ use crate::branch::{BranchIdentifier, BranchInfo};
 use crate::commit::CommitIdentifier;
 use crate::db::{data as D, Batch, DBSync, DB};
 use crate::error::Result;
-use crate::session::Session;
+use crate::session::SessionSync;
 use crate::snapshot::Snapshot;
+use crate::sync;
 use lfu::LFUCache;
 use std::collections::HashMap;
-use std::sync::Arc;
+
+sync!(sync ContextSync(Context) {});
 
 pub struct Context {
     db: DBSync,
     snapshot_cache: LFUCache<CommitIdentifier, Snapshot>,
-    active_sessions: HashMap<BranchIdentifier, Arc<Session>>,
+    active_sessions: HashMap<BranchIdentifier, SessionSync>,
 }
 
 impl Context {
