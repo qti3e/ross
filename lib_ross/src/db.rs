@@ -1,5 +1,7 @@
 use rocksdb;
+pub use rocksdb::Error;
 
+/// A typespace layer on the top of rocksdb.
 pub struct DB {
     db: rocksdb::DB,
 }
@@ -14,12 +16,29 @@ impl DB {
         DB { db }
     }
 
-    /// Perform the given transaction on the database.
+    /// Perform the given transaction on the database, returns true/false indicating
+    /// the success or failure of the commit.
     pub fn perform(&self, batch: Batch) -> bool {
         self.db.write(batch.finalize()).is_ok()
     }
+
+    /// Return the data associated with the given key.
+    pub fn get<K, V>(&self, key: K) -> Result<Option<V>, Error>
+    where
+        K: data::DBKey<V>,
+        V: serde::de::DeserializeOwned,
+    {
+        let key = bincode::serialize(&key.key()).unwrap();
+        let bytes = match self.db.get_pinned(key)? {
+            Some(slice) => slice,
+            None => return Ok(None),
+        };
+        let data = bincode::deserialize(bytes.as_ref()).unwrap();
+        Ok(Some(data))
+    }
 }
 
+/// An atomic batch of write operations.
 pub struct Batch {
     batch: rocksdb::WriteBatch,
 }
@@ -59,14 +78,14 @@ impl Batch {
 
     pub fn append<K, V, I: serde::Serialize>(&mut self, key: K, item: I)
     where
-        K: data::DBKey<V> + data::DBKeyVec<I>,
+        K: data::DBKey<V> + data::DBKeyWithAppend<I>,
     {
         let key = bincode::serialize(&key.key()).unwrap();
         let item = bincode::serialize(&item).unwrap();
         self.batch.merge(key, item);
     }
 
-    pub fn finalize(self) -> rocksdb::WriteBatch {
+    pub(crate) fn finalize(self) -> rocksdb::WriteBatch {
         self.batch
     }
 }
@@ -84,7 +103,7 @@ pub mod data {
     use crate::action::Transaction;
     use crate::branch::{BranchIdentifier, BranchInfo};
     use crate::commit::{CommitIdentifier, CommitInfo};
-    use crate::hash::Hash16;
+    use crate::hash::{Hash16, Hash20};
     use crate::log::LogItem;
     use serde::{Deserialize, Serialize};
 
@@ -92,7 +111,7 @@ pub mod data {
         fn key(self) -> Key;
     }
 
-    pub trait DBKeyVec<Item> {}
+    pub trait DBKeyWithAppend<Item> {}
 
     #[derive(Debug, Serialize, Deserialize)]
     pub enum Key {
@@ -121,7 +140,7 @@ pub mod data {
         }
     }
 
-    impl DBKeyVec<BranchesAppendItem> for BranchesKey {}
+    impl DBKeyWithAppend<BranchesAppendItem> for BranchesKey {}
 
     // ---- BranchInfo
 
@@ -134,6 +153,20 @@ pub mod data {
     impl DBKey<BranchInfoValue> for BranchInfoKey {
         fn key(self) -> Key {
             Key::BranchInfo(self)
+        }
+    }
+
+    impl BranchInfoKey {
+        pub fn all(project: Hash16) -> (Self, Self) {
+            let min = BranchIdentifier {
+                project,
+                uuid: Hash16::MIN,
+            };
+            let max = BranchIdentifier {
+                project,
+                uuid: Hash16::MAX,
+            };
+            (Self(min), Self(max))
         }
     }
 
@@ -154,7 +187,21 @@ pub mod data {
         }
     }
 
-    impl DBKeyVec<LiveChangesAppendItem> for LiveChangesKey {}
+    impl DBKeyWithAppend<LiveChangesAppendItem> for LiveChangesKey {}
+
+    impl LiveChangesKey {
+        pub fn all(project: Hash16) -> (Self, Self) {
+            let min = BranchIdentifier {
+                project,
+                uuid: Hash16::MIN,
+            };
+            let max = BranchIdentifier {
+                project,
+                uuid: Hash16::MAX,
+            };
+            (Self(min), Self(max))
+        }
+    }
 
     // ---- CommitInfo
 
@@ -170,10 +217,38 @@ pub mod data {
         }
     }
 
+    impl CommitInfoKey {
+        pub fn all(project: Hash16) -> (Self, Self) {
+            let min = CommitIdentifier {
+                project,
+                hash: Hash20::MIN,
+            };
+            let max = CommitIdentifier {
+                project,
+                hash: Hash20::MAX,
+            };
+            (Self(min), Self(max))
+        }
+    }
+
     // ---- Snapshot
 
     #[derive(Debug, Serialize, Deserialize)]
     pub struct SnapshotKey(pub CommitIdentifier);
+
+    impl SnapshotKey {
+        pub fn all(project: Hash16) -> (Self, Self) {
+            let min = CommitIdentifier {
+                project,
+                hash: Hash20::MIN,
+            };
+            let max = CommitIdentifier {
+                project,
+                hash: Hash20::MAX,
+            };
+            (Self(min), Self(max))
+        }
+    }
 
     // ---- Log
 
@@ -192,5 +267,5 @@ pub mod data {
         }
     }
 
-    impl DBKeyVec<LogAppendItem> for LogKey {}
+    impl DBKeyWithAppend<LogAppendItem> for LogKey {}
 }

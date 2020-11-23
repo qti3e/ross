@@ -11,7 +11,10 @@ use std::fmt::{self, Write};
 pub struct Hash16([u8; 16]);
 
 impl Hash16 {
-    pub fn new(s: &str) -> Result<Hash16, HashParseError> {
+    pub const MIN: Hash16 = Hash16([0; 16]);
+    pub const MAX: Hash16 = Hash16([255; 16]);
+
+    pub fn parse(s: &str) -> Result<Hash16, HashParseError> {
         if s.len() != 32 {
             return Err(HashParseError::InsufficientLength);
         }
@@ -71,7 +74,10 @@ impl std::fmt::Debug for Hash16 {
 pub struct Hash20([u8; 20]);
 
 impl Hash20 {
-    pub fn new(s: &str) -> Result<Hash20, HashParseError> {
+    pub const MIN: Hash20 = Hash20([0; 20]);
+    pub const MAX: Hash20 = Hash20([255; 20]);
+
+    pub fn parse(s: &str) -> Result<Hash20, HashParseError> {
         if s.len() != 40 {
             return Err(HashParseError::InsufficientLength);
         }
@@ -151,7 +157,7 @@ mod test_hash16 {
 
     #[test]
     fn serde_bincode() {
-        let uuid = Hash16::new("5e78dc74efe74338a7a4d6d16d655e52").unwrap();
+        let uuid = Hash16::parse("5e78dc74efe74338a7a4d6d16d655e52").unwrap();
         let serialized = bincode::serialize(&uuid).unwrap();
         assert_eq!(serialized.len(), 16);
         let deserialized = bincode::deserialize::<Hash16>(&serialized).unwrap();
@@ -161,8 +167,16 @@ mod test_hash16 {
     #[test]
     fn to_string() {
         let s = "5e78dc74efe74338a7a4d6d16d655e52";
-        let uuid = Hash16::new(s).unwrap();
+        let uuid = Hash16::parse(s).unwrap();
         assert_eq!(String::from(&uuid), s);
+    }
+
+    #[test]
+    fn min_max() {
+        let min = "00000000000000000000000000000000";
+        let max = "ffffffffffffffffffffffffffffffff";
+        assert_eq!(String::from(&Hash16::MIN), min);
+        assert_eq!(String::from(&Hash16::MAX), max);
     }
 }
 
@@ -172,7 +186,7 @@ mod test_hash20 {
 
     #[test]
     fn serde_bincode() {
-        let uuid = Hash20::new("f45fb68d900054e8cd89b120957bd3dcb2d8dede").unwrap();
+        let uuid = Hash20::parse("f45fb68d900054e8cd89b120957bd3dcb2d8dede").unwrap();
         let serialized = bincode::serialize(&uuid).unwrap();
         assert_eq!(serialized.len(), 20);
         let deserialized = bincode::deserialize::<Hash20>(&serialized).unwrap();
@@ -182,7 +196,15 @@ mod test_hash20 {
     #[test]
     fn to_string() {
         let s = "f45fb68d900054e8cd89b120957bd3dcb2d8dede";
-        let uuid = Hash20::new(s).unwrap();
+        let uuid = Hash20::parse(s).unwrap();
         assert_eq!(String::from(&uuid), s);
+    }
+
+    #[test]
+    fn min_max() {
+        let min = "0000000000000000000000000000000000000000";
+        let max = "ffffffffffffffffffffffffffffffffffffffff";
+        assert_eq!(String::from(&Hash20::MIN), min);
+        assert_eq!(String::from(&Hash20::MAX), max);
     }
 }

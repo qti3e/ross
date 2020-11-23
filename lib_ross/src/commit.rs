@@ -1,8 +1,9 @@
 use crate::action::Transaction;
 use crate::hash::{Hash16, Hash20};
 use crate::{Timestamp, UserID};
-use sha1::{Sha1, Digest};
 use serde::{Deserialize, Serialize};
+use sha1::{Digest, Sha1};
+use std::fmt::Write;
 
 #[derive(Debug, Serialize, Deserialize, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct CommitIdentifier {
@@ -17,8 +18,10 @@ pub struct CommitIdentifier {
 pub struct CommitInfo {
     /// The branch in which this commit took place the first time.
     branch: Hash16,
-    /// Parent of this commit.
-    parent: Option<Hash20>,
+    /// Parents of this commit, usually each commit has only one parent, which is the
+    /// previous commit, the initial commit has no parents, merge commits have 2 parents
+    /// or even more.
+    parents: Vec<Hash20>,
     /// When the commit was created.
     time: Timestamp,
     /// List of all the authors of the commit.
@@ -36,25 +39,23 @@ impl CommitInfo {
     /// equivalent to `git cat-file commit %commit` and is used to generate the
     /// hash of the commit.
     pub fn text(&self) -> String {
-        match &self.parent {
-            Some(parent) => format!(
-                "tree {}\nparent {}\nauthors {:?}\ncommitter {}\ntimestamp {}\n\n{}",
-                String::from(&self.branch),
-                String::from(parent),
-                self.authors.iter().map(|a| String::from(a)).collect::<Vec<String>>(),
-                String::from(&self.committer),
-                self.time,
-                self.message
-            ),
-            None => format!(
-                "tree {}\nauthors {:?}\ncommitter {}\ntimestamp {}\n\n{}",
-                String::from(&self.branch),
-                self.authors.iter().map(|a| String::from(a)).collect::<Vec<String>>(),
-                String::from(&self.committer),
-                self.time,
-                self.message
-            ),
+        let mut result = String::with_capacity(256);
+        write!(&mut result, "branch {}\n", String::from(&self.branch)).unwrap();
+        for parent in &self.parents {
+            write!(&mut result, "parent {}\n", String::from(parent)).unwrap();
         }
+        for author in &self.authors {
+            write!(&mut result, "author {}\n", String::from(author)).unwrap();
+        }
+        write!(&mut result, "timestamp {}\n", self.time).unwrap();
+        write!(
+            &mut result,
+            "committed-by {}\n\n",
+            String::from(&self.committer)
+        )
+        .unwrap();
+        result.push_str(&self.message);
+        result
     }
 
     /// Generate the hash of the commit.
