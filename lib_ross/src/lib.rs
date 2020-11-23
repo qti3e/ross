@@ -4,6 +4,7 @@ pub mod commit;
 pub mod context;
 pub mod db;
 pub mod hash;
+pub mod log;
 
 pub type Timestamp = u64;
 pub type UserID = hash::Hash16;
