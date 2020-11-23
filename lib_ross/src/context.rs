@@ -1,33 +1,30 @@
-use crate::commit::CommitIdentifier;
 use crate::db::DB;
 use crossbeam::sync::ShardedLock;
 use lfu::LFUCache;
-use std::collections::HashMap;
 use std::sync::Arc;
 
 pub struct Context {
-    /// The database instance that is used as our backend data-storage.
     db: Arc<ShardedLock<DB>>,
 }
 
 impl Context {
     pub fn new(options: &ContextOptions) -> Self {
-        unimplemented!()
+        let path = options.path.clone().unwrap();
+        Context {
+            db: Arc::new(ShardedLock::new(DB::open(&path))),
+        }
     }
-
-    /// Remove all of the closed branches from the cache.
-    pub fn evict(&mut self) {}
 }
 
 pub struct ContextOptions {
-    path: String,
-    checkout_lfu_capacity: usize,
+    pub path: Option<String>,
+    pub checkout_lfu_capacity: usize,
 }
 
 impl Default for ContextOptions {
     fn default() -> Self {
         ContextOptions {
-            path: "/tmp/ross-db".to_string(),
+            path: None,
             checkout_lfu_capacity: 128,
         }
     }
@@ -35,7 +32,7 @@ impl Default for ContextOptions {
 
 impl ContextOptions {
     pub fn path(mut self, path: &str) -> Self {
-        self.path = path.to_string();
+        self.path = Some(path.to_string());
         self
     }
 

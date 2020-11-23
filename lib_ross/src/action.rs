@@ -1,9 +1,10 @@
 use crate::hash::Hash16;
 use crate::{Timestamp, UserID};
 use serde::{Deserialize, Serialize};
-use serde_json::{Number, Value};
+use serde_json::Number;
+use std::collections::BTreeMap;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub enum PrimitiveValue {
     Null,
     Bool(bool),
@@ -16,8 +17,7 @@ pub enum PrimitiveValue {
 pub enum Action {
     CREATE {
         uuid: Hash16,
-        instance: String,
-        data: Value,
+        data: BTreeMap<String, PrimitiveValue>,
     },
     DELETE {
         uuid: Hash16,

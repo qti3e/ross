@@ -18,7 +18,7 @@ impl DB {
 
     /// Perform the given transaction on the database, returns true/false indicating
     /// the success or failure of the commit.
-    pub fn perform(&self, batch: Batch) -> bool {
+    pub fn perform(&mut self, batch: Batch) -> bool {
         self.db.write(batch.finalize()).is_ok()
     }
 
@@ -50,12 +50,12 @@ impl Batch {
         }
     }
 
-    pub fn put<K, V: serde::Serialize>(&mut self, key: K, value: V)
+    pub fn put<K, V: serde::Serialize>(&mut self, key: K, value: &V)
     where
         K: data::DBKey<V>,
     {
         let key = bincode::serialize(&key.key()).unwrap();
-        let value = bincode::serialize(&value).unwrap();
+        let value = bincode::serialize(value).unwrap();
         self.batch.put(key, value);
     }
 
@@ -235,6 +235,14 @@ pub mod data {
 
     #[derive(Debug, Serialize, Deserialize)]
     pub struct SnapshotKey(pub CommitIdentifier);
+
+    pub type SnapshotValue = crate::snapshot::Snapshot;
+
+    impl DBKey<SnapshotValue> for SnapshotKey {
+        fn key(self) -> Key {
+            Key::Snapshot(self)
+        }
+    }
 
     impl SnapshotKey {
         pub fn all(project: Hash16) -> (Self, Self) {
