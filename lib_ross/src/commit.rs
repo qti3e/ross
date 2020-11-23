@@ -17,21 +17,21 @@ pub struct CommitIdentifier {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CommitInfo {
     /// The branch in which this commit took place the first time.
-    branch: Hash16,
+    pub branch: Hash16,
     /// Parents of this commit, usually each commit has only one parent, which is the
     /// previous commit, the initial commit has no parents, merge commits have 2 parents
     /// or even more.
-    parents: Vec<Hash20>,
+    pub parents: Vec<Hash20>,
     /// When the commit was created.
-    time: Timestamp,
+    pub time: Timestamp,
     /// List of all the authors of the commit.
-    authors: Vec<UserID>,
+    pub authors: Vec<UserID>,
     /// The peron who committed the changes.
-    committer: UserID,
+    pub committer: UserID,
     /// The commit message.
-    message: String,
+    pub message: String,
     /// The diff relative to the parent.
-    actions: Vec<Transaction>,
+    pub actions: Vec<Transaction>,
 }
 
 impl CommitInfo {

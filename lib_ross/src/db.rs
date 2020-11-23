@@ -1,5 +1,26 @@
+use crate::error::{Error, Result};
+use crossbeam::sync::{ShardedLock, ShardedLockReadGuard, ShardedLockWriteGuard};
 use rocksdb;
-pub use rocksdb::Error;
+use std::sync::Arc;
+
+#[derive(Clone)]
+pub struct DBSync(Arc<ShardedLock<DB>>);
+
+impl DBSync {
+    pub fn new(db: DB) -> Self {
+        DBSync(Arc::new(ShardedLock::new(db)))
+    }
+
+    #[inline(always)]
+    pub fn read(&self) -> Result<ShardedLockReadGuard<DB>> {
+        self.0.read().map_err(|_| Error::AcquireReadLock)
+    }
+
+    #[inline(always)]
+    pub fn write(&self) -> Result<ShardedLockWriteGuard<DB>> {
+        self.0.write().map_err(|_| Error::AcquireWriteLock)
+    }
+}
 
 /// A typespace layer on the top of rocksdb.
 pub struct DB {
@@ -18,18 +39,22 @@ impl DB {
 
     /// Perform the given transaction on the database, returns true/false indicating
     /// the success or failure of the commit.
-    pub fn perform(&mut self, batch: Batch) -> Result<(), Error> {
-        self.db.write(batch.finalize())
+    #[inline(always)]
+    pub fn perform(&mut self, batch: Batch) -> Result<()> {
+        self.db
+            .write(batch.finalize())
+            .map_err(|e| Error::DBError(e))
     }
 
     /// Return the data associated with the given key.
-    pub fn get<K, V>(&self, key: K) -> Result<Option<V>, Error>
+    pub fn get<K, V>(&self, key: K) -> Result<Option<V>>
     where
         K: data::DBKey<V>,
         V: serde::de::DeserializeOwned,
     {
         let key = bincode::serialize(&key.key()).unwrap();
-        let bytes = match self.db.get_pinned(key)? {
+        let pinned = self.db.get_pinned(key).map_err(|e| Error::DBError(e))?;
+        let bytes = match pinned {
             Some(slice) => slice,
             None => return Ok(None),
         };
@@ -50,6 +75,7 @@ impl Batch {
         }
     }
 
+    #[inline(always)]
     pub fn put<K, V: serde::Serialize>(&mut self, key: K, value: &V)
     where
         K: data::DBKey<V>,
@@ -59,6 +85,7 @@ impl Batch {
         self.batch.put(key, value);
     }
 
+    #[inline(always)]
     pub fn delete<K, V>(&mut self, key: K)
     where
         K: data::DBKey<V>,
@@ -67,6 +94,7 @@ impl Batch {
         self.batch.delete(key);
     }
 
+    #[inline(always)]
     pub fn delete_range<K, V>(&mut self, from: K, to: K)
     where
         K: data::DBKey<V>,
@@ -76,6 +104,7 @@ impl Batch {
         self.batch.delete_range(from, to);
     }
 
+    #[inline(always)]
     pub fn append<K, V, I: serde::Serialize>(&mut self, key: K, item: I)
     where
         K: data::DBKey<V> + data::DBKeyWithAppend<I>,
@@ -85,6 +114,7 @@ impl Batch {
         self.batch.merge(key, item);
     }
 
+    #[inline(always)]
     pub(crate) fn finalize(self) -> rocksdb::WriteBatch {
         self.batch
     }
