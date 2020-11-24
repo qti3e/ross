@@ -87,12 +87,12 @@ impl Batch {
     }
 
     #[inline(always)]
-    pub fn append<K, I: serde::Serialize>(&mut self, key: K, item: I)
+    pub fn push<K, I: serde::Serialize>(&mut self, key: K, item: &I)
     where
         K: keys::DBKey<Vec<I>>,
     {
         let key = bincode::serialize(&key.key()).unwrap();
-        let item = bincode::serialize(&item).unwrap();
+        let item = bincode::serialize(item).unwrap();
         self.batch.merge(key, item);
     }
 

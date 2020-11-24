@@ -62,9 +62,9 @@ impl Context {
     /// Create a new repository.
     pub fn create_repository(&mut self, id: RepositoryID, user: UserID) -> error::Result<()> {
         let mut batch = Batch::new();
-        batch.append(
+        batch.push(
             keys::LogKey(id),
-            log::LogEvent::Init {
+            &log::LogEvent::Init {
                 time: crate::now(),
                 uid: user,
             },
@@ -80,9 +80,9 @@ impl Context {
         info: &branch::BranchInfo,
     ) -> error::Result<()> {
         let mut batch = Batch::new();
-        batch.append(
+        batch.push(
             keys::LogKey(id.repository),
-            log::LogEvent::BranchCreated {
+            &log::LogEvent::BranchCreated {
                 time: crate::now(),
                 uid: info.user,
                 uuid: id.uuid,
@@ -90,7 +90,7 @@ impl Context {
                 head: info.head,
             },
         );
-        batch.append(keys::BranchesKey(id.repository), id.uuid);
+        batch.push(keys::BranchesKey(id.repository), &id.uuid);
         batch.put(keys::BranchInfoKey(id), info);
         self.db.write()?.perform(batch)
     }
