@@ -2,7 +2,7 @@ use crate::hash::{Hash16, Hash20};
 use crate::{Timestamp, UserID};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize, Ord, PartialOrd, Eq, PartialEq, Hash, Clone)]
+#[derive(Debug, Serialize, Deserialize, Ord, PartialOrd, Eq, PartialEq, Hash, Clone, Copy)]
 pub struct BranchIdentifier {
     pub repository: Hash16,
     pub uuid: Hash16,
