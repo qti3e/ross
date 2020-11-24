@@ -1,11 +1,10 @@
-use crate::hash::{Hash16, Hash20};
-use crate::{Timestamp, UserID};
+use crate::{BranchID, CommitID, RepositoryID, Timestamp, UserID};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Ord, PartialOrd, Eq, PartialEq, Hash, Clone, Copy)]
 pub struct BranchIdentifier {
-    pub repository: Hash16,
-    pub uuid: Hash16,
+    pub repository: RepositoryID,
+    pub uuid: BranchID,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -25,8 +24,8 @@ pub enum BranchStatus {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct BranchInfo {
     pub status: BranchStatus,
-    pub head: Hash20,
-    pub fork_root: Option<Hash20>,
+    pub head: CommitID,
+    pub fork_root: Option<CommitID>,
     pub date: Timestamp,
     pub user: UserID,
     pub name: String,

@@ -115,9 +115,9 @@ pub mod keys {
     use crate::action::Transaction;
     use crate::branch::{BranchIdentifier, BranchInfo};
     use crate::commit::{CommitIdentifier, CommitInfo};
-    use crate::hash::{Hash16, Hash20};
     use crate::log::LogItem;
     use crate::snapshot::Snapshot;
+    use crate::{BranchID, CommitID, RepositoryID};
     use serde::{Deserialize, Serialize};
 
     pub trait DBKey<Value> {
@@ -137,9 +137,9 @@ pub mod keys {
     // ---- Branches
 
     #[derive(Debug, Serialize, Deserialize)]
-    pub struct BranchesKey(pub Hash16);
+    pub struct BranchesKey(pub RepositoryID);
 
-    impl DBKey<Vec<Hash16>> for BranchesKey {
+    impl DBKey<Vec<BranchID>> for BranchesKey {
         fn key(self) -> Key {
             Key::Branches(self)
         }
@@ -157,14 +157,14 @@ pub mod keys {
     }
 
     impl BranchInfoKey {
-        pub fn all(repository: Hash16) -> (Self, Self) {
+        pub fn all(repository: RepositoryID) -> (Self, Self) {
             let min = BranchIdentifier {
                 repository,
-                uuid: Hash16::MIN,
+                uuid: BranchID::MIN,
             };
             let max = BranchIdentifier {
                 repository,
-                uuid: Hash16::MAX,
+                uuid: BranchID::MAX,
             };
             (Self(min), Self(max))
         }
@@ -182,14 +182,14 @@ pub mod keys {
     }
 
     impl LiveChangesKey {
-        pub fn all(repository: Hash16) -> (Self, Self) {
+        pub fn all(repository: RepositoryID) -> (Self, Self) {
             let min = BranchIdentifier {
                 repository,
-                uuid: Hash16::MIN,
+                uuid: BranchID::MIN,
             };
             let max = BranchIdentifier {
                 repository,
-                uuid: Hash16::MAX,
+                uuid: BranchID::MAX,
             };
             (Self(min), Self(max))
         }
@@ -207,14 +207,14 @@ pub mod keys {
     }
 
     impl CommitInfoKey {
-        pub fn all(repository: Hash16) -> (Self, Self) {
+        pub fn all(repository: RepositoryID) -> (Self, Self) {
             let min = CommitIdentifier {
                 repository,
-                hash: Hash20::MIN,
+                hash: CommitID::MIN,
             };
             let max = CommitIdentifier {
                 repository,
-                hash: Hash20::MAX,
+                hash: CommitID::MAX,
             };
             (Self(min), Self(max))
         }
@@ -232,14 +232,14 @@ pub mod keys {
     }
 
     impl SnapshotKey {
-        pub fn all(repository: Hash16) -> (Self, Self) {
+        pub fn all(repository: RepositoryID) -> (Self, Self) {
             let min = CommitIdentifier {
                 repository,
-                hash: Hash20::MIN,
+                hash: CommitID::MIN,
             };
             let max = CommitIdentifier {
                 repository,
-                hash: Hash20::MAX,
+                hash: CommitID::MAX,
             };
             (Self(min), Self(max))
         }
@@ -248,7 +248,7 @@ pub mod keys {
     // ---- Log
 
     #[derive(Debug, Serialize, Deserialize)]
-    pub struct LogKey(pub Hash16);
+    pub struct LogKey(pub RepositoryID);
 
     impl DBKey<Vec<LogItem>> for LogKey {
         fn key(self) -> Key {

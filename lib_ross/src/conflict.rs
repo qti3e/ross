@@ -1,21 +1,21 @@
 use crate::action::{Object, PrimitiveValue};
-use crate::hash::Hash16;
+use crate::ObjectID;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Conflict {
     DeleteSet {
-        uuid: Hash16,
+        uuid: ObjectID,
         data: Option<Object>,
     },
     CAS {
-        uuid: Hash16,
+        uuid: ObjectID,
         key: String,
         next: PrimitiveValue,
         current: PrimitiveValue,
         actual: PrimitiveValue,
     },
     Collision {
-        uuid: Hash16,
+        uuid: ObjectID,
     },
 }

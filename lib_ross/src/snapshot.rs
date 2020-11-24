@@ -1,6 +1,6 @@
 use crate::action::{Action, Object, PrimitiveValue};
 use crate::conflict::Conflict;
-use crate::hash::Hash16;
+use crate::ObjectID;
 use rpds::RedBlackTreeMapSync;
 use serde::{Deserialize, Serialize};
 use std::iter::FromIterator;
@@ -8,13 +8,13 @@ use std::iter::FromIterator;
 /// Snapshot is a immutable object that contains all of the key-value pairs
 /// at a certain time, a branch or a commit.
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Snapshot(RedBlackTreeMapSync<Hash16, SnapshotObject>);
+pub struct Snapshot(RedBlackTreeMapSync<ObjectID, SnapshotObject>);
 
 // Like `action::Object` but immutable.
 pub type SnapshotObject = RedBlackTreeMapSync<String, PrimitiveValue>;
 
 impl Snapshot {
-    pub fn get_object(&self, uuid: &Hash16) -> Option<&SnapshotObject> {
+    pub fn get_object(&self, uuid: &ObjectID) -> Option<&SnapshotObject> {
         self.0.get(uuid)
     }
 

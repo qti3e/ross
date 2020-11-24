@@ -1,5 +1,4 @@
-use crate::hash::Hash16;
-use crate::{Timestamp, UserID};
+use crate::{ObjectID, Timestamp, UserID};
 use serde::{Deserialize, Serialize};
 use serde_json::Number;
 use std::collections::BTreeMap;
@@ -18,14 +17,14 @@ pub type Object = BTreeMap<String, PrimitiveValue>;
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Action {
     CREATE {
-        uuid: Hash16,
+        uuid: ObjectID,
         data: Object,
     },
     DELETE {
-        uuid: Hash16,
+        uuid: ObjectID,
     },
     CAS {
-        uuid: Hash16,
+        uuid: ObjectID,
         key: String,
         current: PrimitiveValue,
         next: PrimitiveValue,

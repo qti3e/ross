@@ -1,14 +1,13 @@
 use crate::action::Transaction;
-use crate::hash::{Hash16, Hash20};
-use crate::{Timestamp, UserID};
+use crate::{BranchID, CommitID, RepositoryID, Timestamp, UserID};
 use serde::{Deserialize, Serialize};
 use sha1::{Digest, Sha1};
 use std::fmt::Write;
 
 #[derive(Debug, Serialize, Deserialize, Ord, PartialOrd, Eq, PartialEq, Hash, Clone, Copy)]
 pub struct CommitIdentifier {
-    pub repository: Hash16,
-    pub hash: Hash20,
+    pub repository: RepositoryID,
+    pub hash: CommitID,
 }
 
 /// The commit info is used to store information regarding a commit, it is
@@ -17,11 +16,12 @@ pub struct CommitIdentifier {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CommitInfo {
     /// The branch in which this commit took place the first time.
-    pub branch: Hash16,
+    pub branch: BranchID,
     /// Parents of this commit, usually each commit has only one parent, which is the
     /// previous commit, the initial commit has no parents, merge commits have 2 parents
     /// or even more.
-    pub parents: Vec<Hash20>,
+    /// We store `CommitIdentifier`, which would allow us to have cross repository forks.
+    pub parents: Vec<CommitIdentifier>,
     /// When the commit was created.
     pub time: Timestamp,
     /// List of all the authors of the commit.
@@ -36,7 +36,7 @@ pub struct CommitInfo {
 
 impl CommitInfo {
     /// Create the initial commit.
-    pub fn init(branch: Hash16, uid: UserID) -> Self {
+    pub fn init(branch: BranchID, uid: UserID) -> Self {
         CommitInfo {
             branch,
             parents: Vec::new(),
@@ -55,7 +55,7 @@ impl CommitInfo {
         let mut result = String::with_capacity(256);
         write!(&mut result, "branch {}\n", String::from(&self.branch)).unwrap();
         for parent in &self.parents {
-            write!(&mut result, "parent {}\n", String::from(parent)).unwrap();
+            write!(&mut result, "parent {}\n", String::from(&parent.hash)).unwrap();
         }
         for author in &self.authors {
             write!(&mut result, "author {}\n", String::from(author)).unwrap();
@@ -72,12 +72,12 @@ impl CommitInfo {
     }
 
     /// Generate the hash of the commit.
-    pub fn hash(&self) -> Hash20 {
+    pub fn hash(&self) -> CommitID {
         let text = self.text();
         let data = format!("commit {}{}\0", text.len(), text);
         let mut hasher = Sha1::new();
         hasher.update(data);
         let slice: [u8; 20] = hasher.finalize().into();
-        Hash20::from(slice)
+        CommitID::from(slice)
     }
 }

@@ -1,5 +1,4 @@
-use crate::hash::{Hash16, Hash20};
-use crate::{Timestamp, UserID};
+use crate::{BranchID, CommitID, Timestamp, UserID};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -12,26 +11,26 @@ pub enum LogItem {
     Commit {
         time: Timestamp,
         uid: UserID,
-        hash: Hash20,
-        branch: Hash16,
+        hash: CommitID,
+        branch: BranchID,
     },
     Merge {
         time: Timestamp,
         uid: UserID,
-        to: Hash16,
-        from: Vec<Hash16>,
+        to: BranchID,
+        from: Vec<CommitID>,
     },
     BranchCreated {
         time: Timestamp,
         uid: UserID,
-        uuid: Hash16,
+        uuid: BranchID,
         name: String,
-        head: Hash20,
+        head: CommitID,
     },
     BranchDeleted {
         time: Timestamp,
         uid: UserID,
-        uuid: Hash16,
-        head: Hash20,
+        uuid: BranchID,
+        head: CommitID,
     },
 }

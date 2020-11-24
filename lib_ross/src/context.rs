@@ -3,11 +3,10 @@ use crate::commit::CommitIdentifier;
 use crate::db::{keys, Batch, DBSync, DB};
 use crate::drop_map::DropMap;
 use crate::error::Result;
-use crate::hash::Hash16;
 use crate::log::LogItem;
 use crate::session::SessionSync;
 use crate::snapshot::Snapshot;
-use crate::{sync, Timestamp, UserID};
+use crate::{sync, RepositoryID, Timestamp, UserID};
 use lfu::LFUCache;
 
 sync!(sync ContextSync(Context) {});
@@ -65,7 +64,7 @@ impl Context {
     }
 
     /// Create a new repository.
-    pub fn create_repository(&mut self, id: Hash16, user: UserID) -> Result<()> {
+    pub fn create_repository(&mut self, id: RepositoryID, user: UserID) -> Result<()> {
         let mut batch = Batch::new();
         batch.append(
             keys::LogKey(id),
