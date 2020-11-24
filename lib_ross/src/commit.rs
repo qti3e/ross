@@ -1,4 +1,5 @@
 use crate::*;
+use db::*;
 use serde::{Deserialize, Serialize};
 use sha1::{Digest, Sha1};
 use std::fmt::Write;
@@ -15,7 +16,7 @@ pub struct CommitIdentifier {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CommitInfo {
     /// The branch in which this commit took place the first time.
-    pub branch: BranchID,
+    pub branch: branch::BranchIdentifier,
     /// Parents of this commit, usually each commit has only one parent, which is the
     /// previous commit, the initial commit has no parents, merge commits have 2 parents
     /// or even more.
@@ -23,8 +24,6 @@ pub struct CommitInfo {
     pub parents: Vec<CommitIdentifier>,
     /// When the commit was created.
     pub time: Timestamp,
-    /// List of all the authors of the commit.
-    pub authors: Vec<UserID>,
     /// The peron who committed the changes.
     pub committer: UserID,
     /// The commit message.
@@ -35,12 +34,11 @@ pub struct CommitInfo {
 
 impl CommitInfo {
     /// Create the initial commit.
-    pub fn init(branch: BranchID, uid: UserID) -> Self {
+    pub fn init(branch: branch::BranchIdentifier, uid: UserID) -> Self {
         CommitInfo {
             branch,
             parents: Vec::new(),
             time: crate::now(),
-            authors: Vec::new(),
             committer: uid,
             message: String::from("Init"),
             actions: Vec::new(),
@@ -52,12 +50,15 @@ impl CommitInfo {
     /// hash of the commit.
     pub fn text(&self) -> String {
         let mut result = String::with_capacity(256);
-        write!(&mut result, "branch {}\n", String::from(&self.branch)).unwrap();
+        write!(
+            &mut result,
+            "branch {}@{}\n",
+            String::from(&self.branch.uuid),
+            String::from(&self.branch.repository)
+        )
+        .unwrap();
         for parent in &self.parents {
             write!(&mut result, "parent {}\n", String::from(&parent.hash)).unwrap();
-        }
-        for author in &self.authors {
-            write!(&mut result, "author {}\n", String::from(author)).unwrap();
         }
         write!(&mut result, "timestamp {}\n", self.time).unwrap();
         write!(
@@ -78,5 +79,34 @@ impl CommitInfo {
         hasher.update(data);
         let slice: [u8; 20] = hasher.finalize().into();
         CommitID::from(slice)
+    }
+
+    /// Add the required db operations for this commit to happen into a database
+    /// batch write.
+    pub fn commit(
+        &self,
+        batch: &mut Batch,
+        repository: RepositoryID,
+        snapshot: &snapshot::Snapshot,
+    ) -> CommitIdentifier {
+        let hash = self.hash();
+        let id = CommitIdentifier { repository, hash };
+
+        // 1. Log the event.
+        batch.push(
+            keys::LogKey(repository),
+            &log::LogEvent::Commit {
+                time: self.time,
+                uid: self.committer,
+                branch: self.branch.uuid,
+                hash,
+            },
+        );
+        // 2. Store the commit.
+        batch.put(keys::CommitInfoKey(id), self);
+        // 3. Store the snapshot.
+        batch.put(keys::SnapshotKey(id), snapshot);
+
+        id
     }
 }

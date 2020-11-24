@@ -24,6 +24,7 @@ impl Drop for SessionSync {
 /// a `SessionSync`.
 pub struct Session {
     id: branch::BranchIdentifier,
+    info: branch::BranchInfo,
     db: DBSync,
     live_changes: Vec<action::Transaction>,
     snapshot: snapshot::Snapshot,
@@ -52,9 +53,18 @@ impl Session {
         }
     }
 
+    #[inline]
+    fn put_info(&self, batch: &mut Batch) {
+        batch.put(keys::BranchInfoKey(self.id), &self.info);
+    }
+
     /// Try to perform the given transaction on this session.
     pub fn perform(&mut self, trx: action::Transaction) -> res::Result<()> {
         self.check_write()?;
+        if trx.actions.len() == 0 {
+            return Err(res::Error::EmptyTransaction);
+        }
+
         let snapshot = self
             .snapshot
             .perform(&trx.actions)
@@ -67,6 +77,51 @@ impl Session {
         self.snapshot = snapshot;
         self.live_changes.push(trx);
         Ok(())
+    }
+
+    /// Commit the active changes.
+    pub fn commit(
+        &mut self,
+        committer: UserID,
+        message: String,
+    ) -> res::Result<commit::CommitIdentifier> {
+        self.check_write()?;
+        if self.live_changes.len() == 0 {
+            return Err(res::Error::NoChangeToCommit);
+        }
+
+        let mut commit = commit::CommitInfo {
+            branch: self.id,
+            parents: vec![commit::CommitIdentifier {
+                repository: self.id.repository,
+                hash: self.info.head,
+            }],
+            time: now(),
+            committer,
+            message,
+            actions: Vec::new(),
+        };
+
+        // Move the live changes to the commit, we must restore them if the
+        // the operation fails for any reason.
+        std::mem::swap(&mut commit.actions, &mut self.live_changes);
+
+        let mut batch = Batch::new();
+        // Write the commit.
+        let commit_id = commit.commit(&mut batch, self.id.repository, &self.snapshot);
+        // Change the branch's head.
+        let old_head = std::mem::replace(&mut self.info.head, commit_id.hash);
+        self.put_info(&mut batch);
+        // Clear the live changes.
+        batch.delete(keys::LiveChangesKey(self.id));
+
+        if let Err(e) = self.db_perform(batch) {
+            std::mem::swap(&mut commit.actions, &mut self.live_changes);
+            self.info.head = old_head;
+            return Err(e);
+        }
+
+        Ok(commit_id)
     }
 }
 
@@ -82,6 +137,8 @@ pub mod res {
         Conflict(Vec<crate::conflict::JsonConflict>),
         WriteOnArchived,
         WriteOnStatic,
+        EmptyTransaction,
+        NoChangeToCommit,
     }
 
     impl error::Error for Error {
@@ -100,6 +157,10 @@ pub mod res {
                 Error::Conflict(_) => write!(f, "Action yields conflict."),
                 Error::WriteOnArchived => write!(f, "Cannot write on an archived branch."),
                 Error::WriteOnStatic => write!(f, "Cannot write on an static branch."),
+                Error::EmptyTransaction => {
+                    write!(f, "Transaction must contain at lease one action.")
+                }
+                Error::NoChangeToCommit => write!(f, "No changes added to commit."),
             }
         }
     }
