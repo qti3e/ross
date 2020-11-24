@@ -1,12 +1,5 @@
-use crate::branch::{BranchIdentifier, BranchInfo};
-use crate::commit::CommitIdentifier;
-use crate::db::{keys, Batch, DBSync, DB};
-use crate::drop_map::DropMap;
-use crate::error::Result;
-use crate::log::LogItem;
-use crate::session::SessionSync;
-use crate::snapshot::Snapshot;
-use crate::{sync, RepositoryID, Timestamp, UserID};
+use crate::db::*;
+use crate::*;
 use lfu::LFUCache;
 
 sync!(sync ContextSync(Context) {});
@@ -14,8 +7,8 @@ sync!(sync ContextSync(Context) {});
 pub struct Context {
     db: DBSync,
     opts: ContextOptions,
-    snapshot_cache: LFUCache<CommitIdentifier, Snapshot>,
-    sessions: DropMap<BranchIdentifier, SessionSync>,
+    snapshot_cache: LFUCache<commit::CommitIdentifier, snapshot::Snapshot>,
+    sessions: drop_map::DropMap<branch::BranchIdentifier, session::SessionSync>,
 }
 
 impl Context {
@@ -26,7 +19,7 @@ impl Context {
             db: DBSync::new(DB::open(&path)),
             opts: options.clone(),
             snapshot_cache: LFUCache::with_capacity(options.snapshot_cache_capacity).unwrap(),
-            sessions: DropMap::new(options.session_drop_queue_capacity),
+            sessions: drop_map::DropMap::new(options.session_drop_queue_capacity),
         }
     }
 
@@ -39,14 +32,17 @@ impl Context {
     /// dropped the Arc, so it still owns a reference to it (1 ref), we also keep
     /// a version of the session here in the `self.sessions` map (1 more ref) so
     /// reaching `2` basically means that no one owns the session anymore.
-    pub(crate) fn drop_session(&mut self, id: &BranchIdentifier) {
+    pub(crate) fn drop_session(&mut self, id: &branch::BranchIdentifier) {
         let opts = &self.opts;
         let expiration = opts.session_ttl + crate::now();
         self.sessions.drop(id.clone(), expiration);
     }
 
     /// Return the snapshot of a commit.
-    pub fn snapshot(&mut self, commit: CommitIdentifier) -> Result<Snapshot> {
+    pub fn snapshot(
+        &mut self,
+        commit: commit::CommitIdentifier,
+    ) -> error::Result<snapshot::Snapshot> {
         if let Some(snapshot) = self.snapshot_cache.get(&commit) {
             return Ok(snapshot.clone());
         }
@@ -55,7 +51,7 @@ impl Context {
             let db = self.db.read()?;
             match db.get(keys::SnapshotKey(commit.clone()))? {
                 Some(snapshot) => snapshot,
-                None => Snapshot::default(),
+                None => snapshot::Snapshot::default(),
             }
         };
 
@@ -64,11 +60,11 @@ impl Context {
     }
 
     /// Create a new repository.
-    pub fn create_repository(&mut self, id: RepositoryID, user: UserID) -> Result<()> {
+    pub fn create_repository(&mut self, id: RepositoryID, user: UserID) -> error::Result<()> {
         let mut batch = Batch::new();
         batch.append(
             keys::LogKey(id),
-            LogItem::Init {
+            log::LogItem::Init {
                 time: crate::now(),
                 uid: user,
             },
@@ -78,11 +74,15 @@ impl Context {
     }
 
     /// Create a new branch in a repository with the given information.
-    pub fn create_branch(&mut self, id: BranchIdentifier, info: &BranchInfo) -> Result<()> {
+    pub fn create_branch(
+        &mut self,
+        id: branch::BranchIdentifier,
+        info: &branch::BranchInfo,
+    ) -> error::Result<()> {
         let mut batch = Batch::new();
         batch.append(
             keys::LogKey(id.repository),
-            LogItem::BranchCreated {
+            log::LogItem::BranchCreated {
                 time: crate::now(),
                 uid: info.user,
                 uuid: id.uuid,

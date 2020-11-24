@@ -1,5 +1,4 @@
-use crate::action::Transaction;
-use crate::{BranchID, CommitID, RepositoryID, Timestamp, UserID};
+use crate::*;
 use serde::{Deserialize, Serialize};
 use sha1::{Digest, Sha1};
 use std::fmt::Write;
@@ -31,7 +30,7 @@ pub struct CommitInfo {
     /// The commit message.
     pub message: String,
     /// The diff relative to the parent.
-    pub actions: Vec<Transaction>,
+    pub actions: Vec<action::Transaction>,
 }
 
 impl CommitInfo {

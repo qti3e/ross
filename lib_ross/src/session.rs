@@ -1,15 +1,9 @@
-use crate::action::Transaction;
-use crate::branch::BranchIdentifier;
-use crate::conflict::Conflict;
-use crate::context::ContextSync;
-use crate::db::DBSync;
-use crate::error::Result;
-use crate::snapshot::Snapshot;
-use crate::sync;
+use crate::db::*;
+use crate::*;
 
 sync!(sync SessionSync(Session) {
-    id: BranchIdentifier,
-    ctx: ContextSync
+    id: branch::BranchIdentifier,
+    ctx: context::ContextSync
 });
 
 impl Drop for SessionSync {
@@ -24,25 +18,14 @@ impl Drop for SessionSync {
 }
 
 pub struct Session {
-    id: BranchIdentifier,
-    db: DBSync,
-    live_changes: Vec<Transaction>,
-    snapshot: Snapshot,
-    is_archived: bool,
-    is_static: bool,
+    _id: branch::BranchIdentifier,
+    _db: DBSync,
+    _live_changes: Vec<action::Transaction>,
+    _snapshot: snapshot::Snapshot,
+    _is_archived: bool,
+    _is_static: bool,
 }
 
-impl Session {
-    pub fn perform(&mut self, action: Transaction) -> Result<Option<Vec<Conflict>>> {
-        if self.is_static {}
-
-        if action.actions.len() == 0 {
-            return Ok(None);
-        }
-
-        let snapshot = self.snapshot.perform(&action.actions);
-        Ok(None)
-    }
-}
+impl Session {}
 
 pub mod response {}
