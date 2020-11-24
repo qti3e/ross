@@ -34,6 +34,12 @@ pub struct Session {
 
 impl Session {
     pub fn perform(&mut self, action: Transaction) -> Result<Option<Vec<Conflict>>> {
+        if self.is_static {}
+
+        if action.actions.len() == 0 {
+            return Ok(None);
+        }
+
         let snapshot = self.snapshot.perform(&action.actions);
         Ok(None)
     }

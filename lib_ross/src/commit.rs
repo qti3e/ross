@@ -35,6 +35,19 @@ pub struct CommitInfo {
 }
 
 impl CommitInfo {
+    /// Create the initial commit.
+    pub fn init(branch: Hash16, uid: UserID) -> Self {
+        CommitInfo {
+            branch,
+            parents: Vec::new(),
+            time: crate::now(),
+            authors: Vec::new(),
+            committer: uid,
+            message: String::from("Init"),
+            actions: Vec::new(),
+        }
+    }
+
     /// Return a textual representation of the commit, this method is somewhat
     /// equivalent to `git cat-file commit %commit` and is used to generate the
     /// hash of the commit.

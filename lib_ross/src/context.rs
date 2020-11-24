@@ -3,11 +3,11 @@ use crate::commit::CommitIdentifier;
 use crate::db::{keys, Batch, DBSync, DB};
 use crate::drop_map::DropMap;
 use crate::error::Result;
+use crate::hash::Hash16;
 use crate::log::LogItem;
 use crate::session::SessionSync;
 use crate::snapshot::Snapshot;
-use crate::sync;
-use crate::Timestamp;
+use crate::{sync, Timestamp, UserID};
 use lfu::LFUCache;
 
 sync!(sync ContextSync(Context) {});
@@ -64,8 +64,22 @@ impl Context {
         Ok(snapshot)
     }
 
+    /// Create a new repository.
+    pub fn create_repository(&mut self, id: Hash16, user: UserID) -> Result<()> {
+        let mut batch = Batch::new();
+        batch.append(
+            keys::LogKey(id),
+            LogItem::Init {
+                time: crate::now(),
+                uid: user,
+            },
+        );
+        // TODO(qti3e) Initial commit and `main` branch.
+        self.db.write()?.perform(batch)
+    }
+
     /// Create a new branch in a repository with the given information.
-    pub fn create_branch(&self, id: BranchIdentifier, info: &BranchInfo) -> Result<()> {
+    pub fn create_branch(&mut self, id: BranchIdentifier, info: &BranchInfo) -> Result<()> {
         let mut batch = Batch::new();
         batch.append(
             keys::LogKey(id.repository),
