@@ -1,4 +1,4 @@
-use crate::action::{Action, PrimitiveValue};
+use crate::action::{Action, Object, PrimitiveValue};
 use crate::conflict::Conflict;
 use crate::hash::Hash16;
 use rpds::RedBlackTreeMapSync;
@@ -8,9 +8,16 @@ use std::iter::FromIterator;
 /// Snapshot is a immutable object that contains all of the key-value pairs
 /// at a certain time, a branch or a commit.
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Snapshot(RedBlackTreeMapSync<Hash16, RedBlackTreeMapSync<String, PrimitiveValue>>);
+pub struct Snapshot(RedBlackTreeMapSync<Hash16, SnapshotObject>);
+
+// Like `action::Object` but immutable.
+pub type SnapshotObject = RedBlackTreeMapSync<String, PrimitiveValue>;
 
 impl Snapshot {
+    pub fn get_object(&self, uuid: &Hash16) -> Option<&SnapshotObject> {
+        self.0.get(uuid)
+    }
+
     /// Perform a batch of actions on the snapshot, returns a new snapshot with
     /// the changes applied or a list of conflicts that prevented the transaction
     /// to finish.
@@ -48,11 +55,26 @@ impl Snapshot {
                         current.clone(),
                         next.clone(),
                     ),
-                    None => {
-                        has_conflict = true;
-                        conflicts.push(Conflict::DeleteSet { uuid: uuid.clone() });
-                        continue;
-                    }
+                    None => match self.get_object(uuid) {
+                        Some(org) => {
+                            let data: Object =
+                                org.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+                            has_conflict = true;
+                            conflicts.push(Conflict::DeleteSet {
+                                uuid: uuid.clone(),
+                                data: Some(data),
+                            });
+                            continue;
+                        }
+                        None => {
+                            has_conflict = true;
+                            conflicts.push(Conflict::DeleteSet {
+                                uuid: uuid.clone(),
+                                data: None,
+                            });
+                            continue;
+                        }
+                    },
                 },
                 _ => continue,
             };

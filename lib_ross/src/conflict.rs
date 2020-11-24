@@ -1,4 +1,4 @@
-use crate::action::PrimitiveValue;
+use crate::action::{Object, PrimitiveValue};
 use crate::hash::Hash16;
 use serde::{Deserialize, Serialize};
 
@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 pub enum Conflict {
     DeleteSet {
         uuid: Hash16,
+        data: Option<Object>,
     },
     CAS {
         uuid: Hash16,

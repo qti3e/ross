@@ -12,12 +12,14 @@ pub enum PrimitiveValue {
     String(String),
 }
 
+pub type Object = BTreeMap<String, PrimitiveValue>;
+
 /// Any single action that can mutate the data.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Action {
     CREATE {
         uuid: Hash16,
-        data: BTreeMap<String, PrimitiveValue>,
+        data: Object,
     },
     DELETE {
         uuid: Hash16,
