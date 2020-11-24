@@ -13,5 +13,11 @@ pub mod log;
 pub mod session;
 pub mod snapshot;
 
-pub type Timestamp = u64;
+pub type Timestamp = u128;
 pub type UserID = hash::Hash16;
+
+pub fn now() -> Timestamp {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let duration = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
+    duration.as_millis()
+}
