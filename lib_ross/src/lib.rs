@@ -7,6 +7,7 @@ pub mod commit;
 pub mod conflict;
 pub mod context;
 pub mod db;
+pub mod drop_map;
 pub mod error;
 pub mod hash;
 pub mod log;

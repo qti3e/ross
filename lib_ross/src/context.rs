@@ -1,13 +1,13 @@
 use crate::branch::{BranchIdentifier, BranchInfo};
 use crate::commit::CommitIdentifier;
 use crate::db::{data as D, Batch, DBSync, DB};
+use crate::drop_map::DropMap;
 use crate::error::Result;
 use crate::session::SessionSync;
 use crate::snapshot::Snapshot;
 use crate::sync;
 use crate::Timestamp;
 use lfu::LFUCache;
-use std::collections::HashMap;
 
 sync!(sync ContextSync(Context) {});
 
@@ -15,9 +15,7 @@ pub struct Context {
     db: DBSync,
     opts: ContextOptions,
     snapshot_cache: LFUCache<CommitIdentifier, Snapshot>,
-    sessions: HashMap<BranchIdentifier, SessionSync>,
-    /// Map each branch id to its expiration time.
-    sessions_to_drop: HashMap<BranchIdentifier, Timestamp>,
+    sessions: DropMap<BranchIdentifier, SessionSync>,
 }
 
 impl Context {
@@ -28,8 +26,7 @@ impl Context {
             db: DBSync::new(DB::open(&path)),
             opts: options.clone(),
             snapshot_cache: LFUCache::with_capacity(options.snapshot_cache_capacity).unwrap(),
-            sessions: HashMap::with_capacity(64),
-            sessions_to_drop: HashMap::with_capacity(options.session_drop_queue_capacity + 1),
+            sessions: DropMap::new(options.session_drop_queue_capacity),
         }
     }
 
@@ -73,26 +70,8 @@ impl Context {
     /// reaching `2` basically means that there is no other active session.
     pub(crate) fn drop_session(&mut self, id: &BranchIdentifier) {
         let opts = &self.opts;
-        let ex = opts.session_ttl + crate::now();
-        self.sessions_to_drop.insert(id.clone(), ex);
-        if self.sessions_to_drop.len() >= opts.session_drop_queue_capacity {
-            self.gc();
-        }
-    }
-
-    /// Run the active session garbage collector.
-    pub fn gc(&mut self) {
-        let now = crate::now();
-        let mut q = Vec::with_capacity(16);
-        for (id, ex) in &self.sessions_to_drop {
-            if *ex >= now {
-                q.push(id.clone());
-            }
-        }
-        for id in q {
-            self.sessions_to_drop.remove(&id);
-            self.sessions.remove(&id);
-        }
+        let expiration = opts.session_ttl + crate::now();
+        self.sessions.drop(id.clone(), expiration);
     }
 }
 
