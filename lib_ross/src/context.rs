@@ -1,8 +1,9 @@
 use crate::branch::{BranchIdentifier, BranchInfo};
 use crate::commit::CommitIdentifier;
-use crate::db::{data as D, Batch, DBSync, DB};
+use crate::db::{keys, Batch, DBSync, DB};
 use crate::drop_map::DropMap;
 use crate::error::Result;
+use crate::log::LogItem;
 use crate::session::SessionSync;
 use crate::snapshot::Snapshot;
 use crate::sync;
@@ -30,6 +31,21 @@ impl Context {
         }
     }
 
+    /// This method is called by a `SessionSync` to indicate that it was dropped
+    /// and the number of strong references has reached `2`, in that case this
+    /// method adds the session to a watch list, and waits at least `self.ttl` ms
+    /// before closing the session.
+    ///
+    /// Why `2`? When this method is called `SessionSync` has not yet actually
+    /// dropped the Arc, so it still owns a reference to it (1 ref), we also keep
+    /// a version of the session here in the `self.sessions` map (1 more ref) so
+    /// reaching `2` basically means that no one owns the session anymore.
+    pub(crate) fn drop_session(&mut self, id: &BranchIdentifier) {
+        let opts = &self.opts;
+        let expiration = opts.session_ttl + crate::now();
+        self.sessions.drop(id.clone(), expiration);
+    }
+
     /// Return the snapshot of a commit.
     pub fn snapshot(&mut self, commit: CommitIdentifier) -> Result<Snapshot> {
         if let Some(snapshot) = self.snapshot_cache.get(&commit) {
@@ -38,7 +54,7 @@ impl Context {
 
         let snapshot = {
             let db = self.db.read()?;
-            match db.get(D::SnapshotKey(commit.clone()))? {
+            match db.get(keys::SnapshotKey(commit.clone()))? {
                 Some(snapshot) => snapshot,
                 None => Snapshot::default(),
             }
@@ -49,29 +65,21 @@ impl Context {
     }
 
     /// Create a new branch in a repository with the given information.
-    pub fn create_branch(&self, id: BranchIdentifier, info: BranchInfo) -> Result<()> {
+    pub fn create_branch(&self, id: BranchIdentifier, info: &BranchInfo) -> Result<()> {
         let mut batch = Batch::new();
         batch.append(
-            D::BranchesKey(id.repository),
-            D::BranchesAppendItem(id.uuid),
+            keys::LogKey(id.repository),
+            LogItem::BranchCreated {
+                time: crate::now(),
+                uid: info.user,
+                uuid: id.uuid,
+                name: info.name.clone(),
+                head: info.head,
+            },
         );
-        batch.put(D::BranchInfoKey(id), &D::BranchInfoValue(info));
+        batch.append(keys::BranchesKey(id.repository), id.uuid);
+        batch.put(keys::BranchInfoKey(id), info);
         self.db.write()?.perform(batch)
-    }
-
-    /// This method is called by a `SessionSync` to indicate that it was dropped
-    /// and the number of strong references has reached `2`, in that case this
-    /// method adds the session to a watch list, and waits at least `self.ttl` ms
-    /// before closing the session.
-    ///
-    /// Why `2`? When this method is called `SessionSync` has not yet actually
-    /// dropped the Arc, so it still owns a reference to it (1 ref), we also keep
-    /// a version of the session here in the `self.sessions` map (1 more ref) so
-    /// reaching `2` basically means that there is no other active session.
-    pub(crate) fn drop_session(&mut self, id: &BranchIdentifier) {
-        let opts = &self.opts;
-        let expiration = opts.session_ttl + crate::now();
-        self.sessions.drop(id.clone(), expiration);
     }
 }
 

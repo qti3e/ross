@@ -19,8 +19,7 @@ impl DB {
         DB { db }
     }
 
-    /// Perform the given transaction on the database, returns true/false indicating
-    /// the success or failure of the commit.
+    /// Perform the given transaction on the database.
     #[inline(always)]
     pub fn perform(&mut self, batch: Batch) -> Result<()> {
         self.db
@@ -31,7 +30,7 @@ impl DB {
     /// Return the data associated with the given key.
     pub fn get<K, V>(&self, key: K) -> Result<Option<V>>
     where
-        K: data::DBKey<V>,
+        K: keys::DBKey<V>,
         V: serde::de::DeserializeOwned,
     {
         let key = bincode::serialize(&key.key()).unwrap();
@@ -60,7 +59,7 @@ impl Batch {
     #[inline(always)]
     pub fn put<K, V: serde::Serialize>(&mut self, key: K, value: &V)
     where
-        K: data::DBKey<V>,
+        K: keys::DBKey<V>,
     {
         let key = bincode::serialize(&key.key()).unwrap();
         let value = bincode::serialize(value).unwrap();
@@ -70,7 +69,7 @@ impl Batch {
     #[inline(always)]
     pub fn delete<K, V>(&mut self, key: K)
     where
-        K: data::DBKey<V>,
+        K: keys::DBKey<V>,
     {
         let key = bincode::serialize(&key.key()).unwrap();
         self.batch.delete(key);
@@ -79,7 +78,7 @@ impl Batch {
     #[inline(always)]
     pub fn delete_range<K, V>(&mut self, from: K, to: K)
     where
-        K: data::DBKey<V>,
+        K: keys::DBKey<V>,
     {
         let from = bincode::serialize(&from.key()).unwrap();
         let to = bincode::serialize(&to.key()).unwrap();
@@ -87,9 +86,9 @@ impl Batch {
     }
 
     #[inline(always)]
-    pub fn append<K, V, I: serde::Serialize>(&mut self, key: K, item: I)
+    pub fn append<K, I: serde::Serialize>(&mut self, key: K, item: I)
     where
-        K: data::DBKey<V> + data::DBKeyWithAppend<I>,
+        K: keys::DBKey<Vec<I>>,
     {
         let key = bincode::serialize(&key.key()).unwrap();
         let item = bincode::serialize(&item).unwrap();
@@ -102,7 +101,7 @@ impl Batch {
     }
 }
 
-/// This module contains all of the keys and values that can be used in
+/// This module contains all of the keys that can be used in
 /// our rocksdb instance.
 /// We have these key groups:
 /// 1. Branches: Repository(uuid) -> Vec<BranchUUID>
@@ -111,19 +110,18 @@ impl Batch {
 /// 4. CommitInfo: Commit(hash) -> CommitInfo
 /// 5. Snapshot: Commit(hash) -> Snapshot
 /// 6. Log: Repository(uuid) -> Vec<Log>
-pub mod data {
+pub mod keys {
     use crate::action::Transaction;
     use crate::branch::{BranchIdentifier, BranchInfo};
     use crate::commit::{CommitIdentifier, CommitInfo};
     use crate::hash::{Hash16, Hash20};
     use crate::log::LogItem;
+    use crate::snapshot::Snapshot;
     use serde::{Deserialize, Serialize};
 
     pub trait DBKey<Value> {
         fn key(self) -> Key;
     }
-
-    pub trait DBKeyWithAppend<Item> {}
 
     #[derive(Debug, Serialize, Deserialize)]
     pub enum Key {
@@ -140,29 +138,18 @@ pub mod data {
     #[derive(Debug, Serialize, Deserialize)]
     pub struct BranchesKey(pub Hash16);
 
-    #[derive(Debug, Serialize, Deserialize)]
-    pub struct BranchesValue(pub Vec<Hash16>);
-
-    #[derive(Debug, Serialize, Deserialize)]
-    pub struct BranchesAppendItem(pub Hash16);
-
-    impl DBKey<BranchesValue> for BranchesKey {
+    impl DBKey<Vec<Hash16>> for BranchesKey {
         fn key(self) -> Key {
             Key::Branches(self)
         }
     }
-
-    impl DBKeyWithAppend<BranchesAppendItem> for BranchesKey {}
 
     // ---- BranchInfo
 
     #[derive(Debug, Serialize, Deserialize)]
     pub struct BranchInfoKey(pub BranchIdentifier);
 
-    #[derive(Debug, Serialize, Deserialize)]
-    pub struct BranchInfoValue(pub BranchInfo);
-
-    impl DBKey<BranchInfoValue> for BranchInfoKey {
+    impl DBKey<BranchInfo> for BranchInfoKey {
         fn key(self) -> Key {
             Key::BranchInfo(self)
         }
@@ -187,19 +174,11 @@ pub mod data {
     #[derive(Debug, Serialize, Deserialize)]
     pub struct LiveChangesKey(pub BranchIdentifier);
 
-    #[derive(Debug, Serialize, Deserialize)]
-    pub struct LiveChangesValue(pub Vec<Transaction>);
-
-    #[derive(Debug, Serialize, Deserialize)]
-    pub struct LiveChangesAppendItem(pub Transaction);
-
-    impl DBKey<LiveChangesValue> for LiveChangesKey {
+    impl DBKey<Vec<Transaction>> for LiveChangesKey {
         fn key(self) -> Key {
             Key::LiveChanges(self)
         }
     }
-
-    impl DBKeyWithAppend<LiveChangesAppendItem> for LiveChangesKey {}
 
     impl LiveChangesKey {
         pub fn all(repository: Hash16) -> (Self, Self) {
@@ -220,10 +199,7 @@ pub mod data {
     #[derive(Debug, Serialize, Deserialize)]
     pub struct CommitInfoKey(pub CommitIdentifier);
 
-    #[derive(Debug, Serialize, Deserialize)]
-    pub struct CommitInfoValue(pub CommitInfo);
-
-    impl DBKey<CommitInfoValue> for CommitInfoKey {
+    impl DBKey<CommitInfo> for CommitInfoKey {
         fn key(self) -> Key {
             Key::CommitInfo(self)
         }
@@ -248,9 +224,7 @@ pub mod data {
     #[derive(Debug, Serialize, Deserialize)]
     pub struct SnapshotKey(pub CommitIdentifier);
 
-    pub type SnapshotValue = crate::snapshot::Snapshot;
-
-    impl DBKey<SnapshotValue> for SnapshotKey {
+    impl DBKey<Snapshot> for SnapshotKey {
         fn key(self) -> Key {
             Key::Snapshot(self)
         }
@@ -275,17 +249,9 @@ pub mod data {
     #[derive(Debug, Serialize, Deserialize)]
     pub struct LogKey(pub Hash16);
 
-    #[derive(Debug, Serialize, Deserialize)]
-    pub struct LogValue(pub Vec<LogItem>);
-
-    #[derive(Debug, Serialize, Deserialize)]
-    pub struct LogAppendItem(pub LogItem);
-
-    impl DBKey<LogValue> for LogKey {
+    impl DBKey<Vec<LogItem>> for LogKey {
         fn key(self) -> Key {
             Key::Log(self)
         }
     }
-
-    impl DBKeyWithAppend<LogAppendItem> for LogKey {}
 }
