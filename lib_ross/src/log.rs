@@ -15,20 +15,20 @@ pub enum LogItem {
         hash: Hash20,
         branch: Hash16,
     },
-    CreateBranch {
+    Merge {
+        time: Timestamp,
+        uid: UserID,
+        to: Hash16,
+        from: Vec<Hash16>,
+    },
+    BranchCreated {
         time: Timestamp,
         uid: UserID,
         uuid: Hash16,
         name: String,
         head: Hash20,
     },
-    Merge {
-        time: Timestamp,
-        uid: UserID,
-        base: Hash16,
-        from: Hash16,
-    },
-    DeleteBranch {
+    BranchDeleted {
         time: Timestamp,
         uid: UserID,
         uuid: Hash16,
