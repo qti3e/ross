@@ -1,3 +1,4 @@
+use crate::bincode_vec_append::merge;
 use crate::error::{Error, Result};
 use crate::sync;
 use rocksdb;
@@ -14,7 +15,7 @@ impl DB {
     pub fn open(path: &str) -> Self {
         let mut opts = rocksdb::Options::default();
         opts.create_if_missing(true);
-        // opts.set_merge_operator("bincode-vec-append", full_merge_fn, None);
+        opts.set_merge_operator("bincode-vec-append", append_merge, None);
         let db = rocksdb::DB::open(&opts, path).unwrap();
         DB { db }
     }
@@ -254,4 +255,14 @@ pub mod keys {
             Key::Log(self)
         }
     }
+}
+
+#[inline]
+fn append_merge(
+    _: &[u8],
+    existing_val: Option<&[u8]>,
+    operands: &mut rocksdb::MergeOperands,
+) -> Option<Vec<u8>> {
+    let result = merge(existing_val, operands);
+    Some(result)
 }

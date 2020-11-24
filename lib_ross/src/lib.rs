@@ -2,6 +2,7 @@
 mod macros;
 
 pub mod action;
+pub mod bincode_vec_append;
 pub mod branch;
 pub mod commit;
 pub mod conflict;
