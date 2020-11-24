@@ -64,7 +64,7 @@ impl Context {
         let mut batch = Batch::new();
         batch.append(
             keys::LogKey(id),
-            log::LogItem::Init {
+            log::LogEvent::Init {
                 time: crate::now(),
                 uid: user,
             },
@@ -82,7 +82,7 @@ impl Context {
         let mut batch = Batch::new();
         batch.append(
             keys::LogKey(id.repository),
-            log::LogItem::BranchCreated {
+            log::LogEvent::BranchCreated {
                 time: crate::now(),
                 uid: info.user,
                 uuid: id.uuid,

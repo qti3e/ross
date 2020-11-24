@@ -115,7 +115,7 @@ pub mod keys {
     use crate::action::Transaction;
     use crate::branch::{BranchIdentifier, BranchInfo};
     use crate::commit::{CommitIdentifier, CommitInfo};
-    use crate::log::LogItem;
+    use crate::log::LogEvent;
     use crate::snapshot::Snapshot;
     use crate::{BranchID, CommitID, RepositoryID};
     use serde::{Deserialize, Serialize};
@@ -250,7 +250,7 @@ pub mod keys {
     #[derive(Debug, Serialize, Deserialize)]
     pub struct LogKey(pub RepositoryID);
 
-    impl DBKey<Vec<LogItem>> for LogKey {
+    impl DBKey<Vec<LogEvent>> for LogKey {
         fn key(self) -> Key {
             Key::Log(self)
         }
