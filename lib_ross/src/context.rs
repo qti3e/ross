@@ -87,7 +87,7 @@ impl Context {
                 uid: info.user,
                 uuid: id.uuid,
                 name: info.name.clone(),
-                head: info.head,
+                head: info.head.hash,
             },
         );
         batch.push(keys::BranchesKey(id.repository), &id.uuid);

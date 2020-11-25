@@ -17,6 +17,9 @@ pub struct CommitIdentifier {
 pub struct CommitInfo {
     /// The branch in which this commit took place the first time.
     pub branch: branch::BranchIdentifier,
+    /// Alias for `self.branch.fork_point` to reduce number of db reads when trying to
+    /// find the LCA.
+    pub fork_point: Option<(branch::BranchIdentifier, CommitIdentifier)>,
     /// Parents of this commit, usually each commit has only one parent, which is the
     /// previous commit, the initial commit has no parents, merge commits have 2 parents
     /// or even more.
@@ -37,6 +40,7 @@ impl CommitInfo {
     pub fn init(branch: branch::BranchIdentifier, uid: UserID) -> Self {
         CommitInfo {
             branch,
+            fork_point: None,
             parents: Vec::new(),
             time: crate::now(),
             committer: uid,

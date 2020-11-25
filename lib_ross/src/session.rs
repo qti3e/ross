@@ -28,8 +28,6 @@ pub struct Session {
     db: DBSync,
     live_changes: Vec<action::Transaction>,
     snapshot: snapshot::Snapshot,
-    is_archived: bool,
-    is_static: bool,
 }
 
 impl Session {
@@ -44,9 +42,9 @@ impl Session {
 
     #[inline]
     fn check_write(&self) -> res::Result<()> {
-        if self.is_static {
+        if self.info.is_static {
             Err(res::Error::WriteOnStatic)
-        } else if self.is_archived {
+        } else if self.info.is_archived {
             Err(res::Error::WriteOnArchived)
         } else {
             Ok(())
@@ -92,10 +90,8 @@ impl Session {
 
         let mut commit = commit::CommitInfo {
             branch: self.id,
-            parents: vec![commit::CommitIdentifier {
-                repository: self.id.repository,
-                hash: self.info.head,
-            }],
+            fork_point: self.info.fork_point,
+            parents: vec![self.info.head],
             time: now(),
             committer,
             message,
@@ -110,7 +106,7 @@ impl Session {
         // Write the commit.
         let commit_id = commit.commit(&mut batch, self.id.repository, &self.snapshot);
         // Change the branch's head.
-        let old_head = std::mem::replace(&mut self.info.head, commit_id.hash);
+        let old_head = std::mem::replace(&mut self.info.head, commit_id);
         self.put_info(&mut batch);
         // Clear the live changes.
         batch.delete(keys::LiveChangesKey(self.id));

@@ -23,10 +23,22 @@ pub enum BranchStatus {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct BranchInfo {
-    pub status: BranchStatus,
-    pub head: CommitID,
-    pub fork_root: Option<CommitID>,
-    pub date: Timestamp,
-    pub user: UserID,
+    pub head: commit::CommitIdentifier,
+    pub fork_point: Option<(BranchIdentifier, commit::CommitIdentifier)>,
     pub name: String,
+    pub created_at: Timestamp,
+    pub user: UserID,
+    pub is_static: bool,
+    pub is_archived: bool,
+}
+
+impl BranchInfo {
+    pub fn status(&self) -> BranchStatus {
+        match (self.is_static, self.is_archived) {
+            (false, false) => BranchStatus::Normal,
+            (true, false) => BranchStatus::Static,
+            (false, true) => BranchStatus::Archived,
+            _ => BranchStatus::StaticArchived,
+        }
+    }
 }
