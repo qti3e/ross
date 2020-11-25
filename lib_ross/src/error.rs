@@ -8,6 +8,8 @@ pub enum Error {
     AcquireWriteLock,
     AcquireReadLock,
     AcquireLock,
+    LcaNotFound,
+    CommitNotFound,
 }
 
 impl error::Error for Error {
@@ -26,6 +28,8 @@ impl fmt::Display for Error {
             Error::AcquireWriteLock => write!(f, "Could not acquire the write lock."),
             Error::AcquireReadLock => write!(f, "Could not acquire the read lock."),
             Error::AcquireLock => write!(f, "Could not acquire a lock."),
+            Error::LcaNotFound => write!(f, "Could not find LCA of two commits."),
+            Error::CommitNotFound => write!(f, "Could not find the commit in DB."),
         }
     }
 }
