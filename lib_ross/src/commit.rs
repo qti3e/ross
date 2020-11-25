@@ -53,14 +53,11 @@ impl CommitInfo {
     /// equivalent to `git cat-file commit %commit` and is used to generate the
     /// hash of the commit.
     pub fn text(&self) -> String {
-        let mut result = String::with_capacity(256);
-        write!(
-            &mut result,
-            "branch {}@{}\n",
-            String::from(&self.branch.uuid),
-            String::from(&self.branch.repository)
-        )
-        .unwrap();
+        let mut result = String::with_capacity(512);
+        write!(&mut result, "branch {}\n", String::from(&self.branch.uuid)).unwrap();
+        if let Some((_, commit)) = &self.fork_point {
+            write!(&mut result, "tree {}\n", String::from(&commit.hash)).unwrap();
+        }
         for parent in &self.parents {
             write!(&mut result, "parent {}\n", String::from(&parent.hash)).unwrap();
         }
