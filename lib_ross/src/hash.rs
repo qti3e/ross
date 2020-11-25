@@ -14,6 +14,10 @@ impl Hash16 {
     pub const MIN: Hash16 = Hash16([0; 16]);
     pub const MAX: Hash16 = Hash16([255; 16]);
 
+    pub fn rand() -> Self {
+        Self(rand::random())
+    }
+
     pub fn parse(s: &str) -> Result<Hash16, HashParseError> {
         if s.len() != 32 {
             return Err(HashParseError::InsufficientLength);
@@ -76,6 +80,10 @@ pub struct Hash20([u8; 20]);
 impl Hash20 {
     pub const MIN: Hash20 = Hash20([0; 20]);
     pub const MAX: Hash20 = Hash20([255; 20]);
+
+    pub fn rand() -> Self {
+        Self(rand::random())
+    }
 
     pub fn parse(s: &str) -> Result<Hash20, HashParseError> {
         if s.len() != 40 {
@@ -177,6 +185,15 @@ mod test_hash16 {
         let max = "ffffffffffffffffffffffffffffffff";
         assert_eq!(String::from(&Hash16::MIN), min);
         assert_eq!(String::from(&Hash16::MAX), max);
+    }
+
+    #[test]
+    fn rand() {
+        let h1 = Hash16::rand();
+        let h2 = Hash16::rand();
+        assert_eq!(h1, h1);
+        assert_eq!(h2, h2);
+        assert_ne!(h1, h2);
     }
 }
 
