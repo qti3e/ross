@@ -40,3 +40,36 @@ macro_rules! sync {
         }
     };
 }
+
+#[macro_export]
+macro_rules! db_keys {
+    (
+        $trait_name:ident($name:ident) {
+            $(
+                $(#[$attr:meta])*
+                $key_name:ident($key_type:ty) -> $value_type:ty
+            ),*
+        }
+    ) => {
+        pub trait $trait_name<Value> {
+            fn key(self) -> $name;
+        }
+
+        #[derive(Debug, Serialize, Deserialize)]
+        pub enum $name {
+            $($key_name($key_name)),*
+        }
+
+        $(
+            $(#[$attr])*
+            #[derive(Debug, Serialize, Deserialize)]
+            pub struct $key_name(pub $key_type);
+
+            impl $trait_name<$value_type> for $key_name {
+                fn key(self) -> $name {
+                    $name::$key_name(self)
+                }
+            }
+        )*
+    }
+}

@@ -49,7 +49,7 @@ impl Context {
 
         let snapshot = {
             let db = self.db.read()?;
-            match db.get(keys::SnapshotKey(commit.clone()))? {
+            match db.get(keys::Snapshot(commit.clone()))? {
                 Some(snapshot) => snapshot,
                 None => snapshot::Snapshot::default(),
             }
@@ -63,7 +63,7 @@ impl Context {
     pub fn create_repository(&mut self, id: RepositoryID, user: UserID) -> error::Result<()> {
         let mut batch = Batch::new();
         batch.push(
-            keys::LogKey(id),
+            keys::Log(id),
             &log::LogEvent::Init {
                 time: crate::now(),
                 uid: user,
@@ -81,7 +81,7 @@ impl Context {
     ) -> error::Result<()> {
         let mut batch = Batch::new();
         batch.push(
-            keys::LogKey(id.repository),
+            keys::Log(id.repository),
             &log::LogEvent::BranchCreated {
                 time: crate::now(),
                 uid: info.user,
@@ -90,8 +90,8 @@ impl Context {
                 head: info.head.hash,
             },
         );
-        batch.push(keys::BranchesKey(id.repository), &id.uuid);
-        batch.put(keys::BranchInfoKey(id), info);
+        batch.push(keys::Branches(id.repository), &id.uuid);
+        batch.put(keys::BranchInfo(id), info);
         self.db.write()?.perform(batch)
     }
 }

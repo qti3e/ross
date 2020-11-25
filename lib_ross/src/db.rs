@@ -15,7 +15,7 @@ impl DB {
     pub fn open(path: &str) -> Self {
         let mut opts = rocksdb::Options::default();
         opts.create_if_missing(true);
-        opts.set_merge_operator("bincode-vec-append", append_merge, None);
+        opts.set_merge_operator("bincode-vec-append", vec_push_merge, None);
         let db = rocksdb::DB::open(&opts, path).unwrap();
         DB { db }
     }
@@ -112,153 +112,28 @@ impl Batch {
 /// 5. Snapshot: Commit(hash) -> Snapshot
 /// 6. Log: Repository(uuid) -> Vec<Log>
 pub mod keys {
-    use crate::action::Transaction;
-    use crate::branch::{BranchIdentifier, BranchInfo};
-    use crate::commit::{CommitIdentifier, CommitInfo};
-    use crate::log::LogEvent;
-    use crate::snapshot::Snapshot;
-    use crate::{BranchID, CommitID, RepositoryID};
+    use crate::*;
     use serde::{Deserialize, Serialize};
 
-    pub trait DBKey<Value> {
-        fn key(self) -> Key;
-    }
-
-    #[derive(Debug, Serialize, Deserialize)]
-    pub enum Key {
-        Branches(BranchesKey),
-        BranchInfo(BranchInfoKey),
-        LiveChanges(LiveChangesKey),
-        CommitInfo(CommitInfoKey),
-        Snapshot(SnapshotKey),
-        Log(LogKey),
-    }
-
-    // ---- Branches
-
-    #[derive(Debug, Serialize, Deserialize)]
-    pub struct BranchesKey(pub RepositoryID);
-
-    impl DBKey<Vec<BranchID>> for BranchesKey {
-        fn key(self) -> Key {
-            Key::Branches(self)
-        }
-    }
-
-    // ---- BranchInfo
-
-    #[derive(Debug, Serialize, Deserialize)]
-    pub struct BranchInfoKey(pub BranchIdentifier);
-
-    impl DBKey<BranchInfo> for BranchInfoKey {
-        fn key(self) -> Key {
-            Key::BranchInfo(self)
-        }
-    }
-
-    impl BranchInfoKey {
-        pub fn all(repository: RepositoryID) -> (Self, Self) {
-            let min = BranchIdentifier {
-                repository,
-                uuid: BranchID::MIN,
-            };
-            let max = BranchIdentifier {
-                repository,
-                uuid: BranchID::MAX,
-            };
-            (Self(min), Self(max))
-        }
-    }
-
-    // ---- LiveChanges
-
-    #[derive(Debug, Serialize, Deserialize)]
-    pub struct LiveChangesKey(pub BranchIdentifier);
-
-    impl DBKey<Vec<Transaction>> for LiveChangesKey {
-        fn key(self) -> Key {
-            Key::LiveChanges(self)
-        }
-    }
-
-    impl LiveChangesKey {
-        pub fn all(repository: RepositoryID) -> (Self, Self) {
-            let min = BranchIdentifier {
-                repository,
-                uuid: BranchID::MIN,
-            };
-            let max = BranchIdentifier {
-                repository,
-                uuid: BranchID::MAX,
-            };
-            (Self(min), Self(max))
-        }
-    }
-
-    // ---- CommitInfo
-
-    #[derive(Debug, Serialize, Deserialize)]
-    pub struct CommitInfoKey(pub CommitIdentifier);
-
-    impl DBKey<CommitInfo> for CommitInfoKey {
-        fn key(self) -> Key {
-            Key::CommitInfo(self)
-        }
-    }
-
-    impl CommitInfoKey {
-        pub fn all(repository: RepositoryID) -> (Self, Self) {
-            let min = CommitIdentifier {
-                repository,
-                hash: CommitID::MIN,
-            };
-            let max = CommitIdentifier {
-                repository,
-                hash: CommitID::MAX,
-            };
-            (Self(min), Self(max))
-        }
-    }
-
-    // ---- Snapshot
-
-    #[derive(Debug, Serialize, Deserialize)]
-    pub struct SnapshotKey(pub CommitIdentifier);
-
-    impl DBKey<Snapshot> for SnapshotKey {
-        fn key(self) -> Key {
-            Key::Snapshot(self)
-        }
-    }
-
-    impl SnapshotKey {
-        pub fn all(repository: RepositoryID) -> (Self, Self) {
-            let min = CommitIdentifier {
-                repository,
-                hash: CommitID::MIN,
-            };
-            let max = CommitIdentifier {
-                repository,
-                hash: CommitID::MAX,
-            };
-            (Self(min), Self(max))
-        }
-    }
-
-    // ---- Log
-
-    #[derive(Debug, Serialize, Deserialize)]
-    pub struct LogKey(pub RepositoryID);
-
-    impl DBKey<Vec<LogEvent>> for LogKey {
-        fn key(self) -> Key {
-            Key::Log(self)
-        }
-    }
+    db_keys!(DBKey(Key) {
+        /// Log all of the events in a repository since its creation.
+        Log(RepositoryID) -> Vec<log::LogEvent>,
+        /// List of all the branches that a repository owns.
+        Branches(RepositoryID) -> Vec<BranchID>,
+        /// Store the information regarding each branch.
+        BranchInfo(branch::BranchIdentifier) -> branch::BranchInfo,
+        /// Each non-static branch can have list of pending actions which
+        /// are not committed yet.
+        LiveChanges(branch::BranchIdentifier) -> Vec<action::Transaction>,
+        /// This key-group is used to store commits.
+        CommitInfo(commit::CommitIdentifier) -> commit::CommitInfo,
+        /// Store a snapshot of the whole object set for each commit.
+        Snapshot(commit::CommitIdentifier) -> snapshot::Snapshot
+    });
 }
 
 #[inline]
-fn append_merge(
+fn vec_push_merge(
     _: &[u8],
     existing_val: Option<&[u8]>,
     operands: &mut rocksdb::MergeOperands,

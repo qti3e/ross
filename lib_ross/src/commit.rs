@@ -98,7 +98,7 @@ impl CommitInfo {
 
         // 1. Log the event.
         batch.push(
-            keys::LogKey(repository),
+            keys::Log(repository),
             &log::LogEvent::Commit {
                 time: self.time,
                 uid: self.committer,
@@ -107,9 +107,9 @@ impl CommitInfo {
             },
         );
         // 2. Store the commit.
-        batch.put(keys::CommitInfoKey(id), self);
+        batch.put(keys::CommitInfo(id), self);
         // 3. Store the snapshot.
-        batch.put(keys::SnapshotKey(id), snapshot);
+        batch.put(keys::Snapshot(id), snapshot);
 
         id
     }

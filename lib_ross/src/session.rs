@@ -53,7 +53,7 @@ impl Session {
 
     #[inline]
     fn put_info(&self, batch: &mut Batch) {
-        batch.put(keys::BranchInfoKey(self.id), &self.info);
+        batch.put(keys::BranchInfo(self.id), &self.info);
     }
 
     /// Try to perform the given transaction on this session.
@@ -69,7 +69,7 @@ impl Session {
             .map_err(|c| res::Error::Conflict(c.iter().map(|x| x.into()).collect()))?;
         // New snapshot is created and it did not have any conflicts.
         let mut batch = Batch::new();
-        batch.push(keys::LiveChangesKey(self.id.clone()), &trx);
+        batch.push(keys::LiveChanges(self.id.clone()), &trx);
         self.db_perform(batch)?;
         // Update the current instance.
         self.snapshot = snapshot;
@@ -109,7 +109,7 @@ impl Session {
         let old_head = std::mem::replace(&mut self.info.head, commit_id);
         self.put_info(&mut batch);
         // Clear the live changes.
-        batch.delete(keys::LiveChangesKey(self.id));
+        batch.delete(keys::LiveChanges(self.id));
 
         if let Err(e) = self.db_perform(batch) {
             std::mem::swap(&mut commit.actions, &mut self.live_changes);
