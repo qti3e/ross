@@ -1,5 +1,5 @@
 use crate::*;
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 
 pub struct LcaCommitData {
     time: Timestamp,
@@ -26,15 +26,21 @@ fn lca2<'a>(
     a: &commit::CommitIdentifier,
     b: &commit::CommitIdentifier,
 ) -> error::Result<commit::CommitIdentifier> {
-    let mut seen =
-        BTreeMap::<branch::BranchIdentifier, Option<(commit::CommitIdentifier, Timestamp)>>::new();
-
     let mut commit_a = get_commit_fn(a)?;
     let mut commit_b = get_commit_fn(b)?;
-    if commit_b.time > commit_a.time {
+    let min = if commit_b.time > commit_a.time {
         std::mem::swap(&mut commit_a, &mut commit_b);
+        a
+    } else {
+        b
+    };
+
+    if commit_a.branch == commit_b.branch {
+        return Ok(*min);
     }
 
+    let mut seen =
+        HashMap::<branch::BranchIdentifier, Option<(commit::CommitIdentifier, Timestamp)>>::with_capacity(8);
     seen.insert(commit_a.branch, None);
     seen.insert(commit_b.branch, None);
 
@@ -225,6 +231,11 @@ mod test {
         test(vec![g, h], 2, g);
         // Distance = 1
         test(vec![d, f], 2, b);
+        // Same branch
+        test(vec![c, e], 2, c);
+        test(vec![c, b], 2, b);
+        test(vec![g, g], 2, g);
+        test(vec![g, a], 2, a);
         // etc...
         test(vec![f, h], 3, a);
         test(vec![g, c], 2, a);
