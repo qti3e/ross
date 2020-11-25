@@ -94,6 +94,14 @@ impl Context {
         batch.put(keys::BranchInfo(id), info);
         self.db.write()?.perform(batch)
     }
+
+    pub fn open_session(
+        &mut self,
+        branch: branch::BranchIdentifier,
+    ) -> error::Result<session::SessionSync> {
+        self.sessions
+            .get_or_maybe_insert_with(branch, || unimplemented!())
+    }
 }
 
 #[derive(Debug, Clone)]

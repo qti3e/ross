@@ -32,6 +32,7 @@ pub struct CommitInfo {
     /// The commit message.
     pub message: String,
     /// The diff relative to the parent.
+    /// TODO(qti3e) Maybe we should not store the diff in CommitInfo?
     pub actions: Vec<action::Transaction>,
 }
 

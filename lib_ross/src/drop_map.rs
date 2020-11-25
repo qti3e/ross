@@ -1,5 +1,8 @@
 use crate::Timestamp;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::hash_map;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::fmt;
+use std::hash::Hash;
 
 /// A map that drops its elements after an expiration time if they are
 /// not accessed until then. This map always returns a clone of the value.
@@ -8,7 +11,7 @@ pub struct DropMap<K, V> {
     /// trigger the GC.
     capacity: usize,
     to_drop_count: usize,
-    data: BTreeMap<K, Entry<V>>,
+    data: HashMap<K, Entry<V>>,
     drop_queue: BTreeMap<Timestamp, SmallSet<K>>,
 }
 
@@ -82,25 +85,35 @@ impl<T: Ord + Copy> SmallSet<T> {
     }
 }
 
-impl<K: Ord + Copy, V: Clone> DropMap<K, V> {
+impl<K: Ord + Copy + Hash, V: Clone> DropMap<K, V> {
     pub fn new(capacity: usize) -> Self {
         DropMap {
             capacity,
             to_drop_count: 0,
-            data: BTreeMap::new(),
+            data: HashMap::new(),
             drop_queue: BTreeMap::new(),
         }
     }
 
     /// Return the element from the map with the given key or insert the one
     /// returned by the provided closure.
-    pub fn get_or_insert_with<F: FnOnce() -> V>(&mut self, key: K, f: F) -> V {
-        let data = self.data.entry(key).or_insert_with(|| Entry {
-            value: f(),
-            expiration: None,
-        });
+    pub fn get_or_maybe_insert_with<F: FnOnce() -> Result<V, E>, E: fmt::Debug>(
+        &mut self,
+        key: K,
+        f: F,
+    ) -> Result<V, E> {
+        let data = match self.data.entry(key) {
+            hash_map::Entry::Occupied(o) => o.into_mut(),
+            hash_map::Entry::Vacant(v) => {
+                let value = f()?;
+                v.insert(Entry {
+                    value,
+                    expiration: None,
+                })
+            }
+        };
 
-        // If the element has a expiration data (i.e it is supposed to be dropped)
+        // If the element has a expiration date (i.e it is supposed to be dropped)
         // cancel the drop and set the expiration data to None.
         if let Some(expiration) = data.expiration {
             cancel_drop(&mut self.drop_queue, &key, expiration);
@@ -110,7 +123,7 @@ impl<K: Ord + Copy, V: Clone> DropMap<K, V> {
 
         // This map always returns a clone of the data, it's supposed to work with
         // `RC`, `Arc`, `Box` and other smart pointers.
-        data.value.clone()
+        Ok(data.value.clone())
     }
 
     /// Set an expiration date on the key, we will wait at least until the expiration
