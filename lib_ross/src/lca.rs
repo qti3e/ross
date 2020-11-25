@@ -29,8 +29,12 @@ fn lca2<'a>(
     let mut seen =
         BTreeMap::<branch::BranchIdentifier, Option<(commit::CommitIdentifier, Timestamp)>>::new();
 
-    let commit_a = get_commit_fn(a)?;
-    let commit_b = get_commit_fn(b)?;
+    let mut commit_a = get_commit_fn(a)?;
+    let mut commit_b = get_commit_fn(b)?;
+    if commit_b.time > commit_a.time {
+        std::mem::swap(&mut commit_a, &mut commit_b);
+    }
+
     seen.insert(commit_a.branch, None);
     seen.insert(commit_b.branch, None);
 
@@ -49,21 +53,27 @@ fn lca2<'a>(
 
     if let Some((branch, id)) = commit_a.fork_point {
         match seen.insert(branch, Some((id, commit_a.time))) {
-            Some(_) => {
+            Some(None) => {
                 return Ok(id);
             }
-            _ => {}
+            Some(Some((other, time))) if time < commit_a.time => {
+                return Ok(other);
+            }
+            Some(Some(_)) => {
+                return Ok(id);
+            }
+            None => {}
         }
         q.enqueue(id);
     }
 
-    while let Some(id) = q.dequeue() {
-        let commit = get_commit_fn(&id)?;
+    while let Some(to_visit) = q.dequeue() {
+        let commit = get_commit_fn(&to_visit)?;
         if commit.fork_point.is_none() {
             continue;
         }
-        let (branch, commit_id) = commit.fork_point.unwrap();
-        match seen.insert(branch, Some((commit_id, commit.time))) {
+        let (branch, id) = commit.fork_point.unwrap();
+        match seen.insert(branch, Some((id, commit.time))) {
             Some(None) => {
                 return Ok(id);
             }
@@ -75,7 +85,7 @@ fn lca2<'a>(
             }
             None => {}
         }
-        q.enqueue(commit_id);
+        q.enqueue(id);
     }
 
     Err(error::Error::LcaNotFound)
@@ -172,27 +182,51 @@ mod test {
     }
 
     #[test]
-    fn basic() {
-        // - * - M ---- * ------ A --> B0
-        //       \
-        //        -- * ---- B -------> B1
-        let mut g = Graph::new();
-        let b0 = g.init();
+    fn lca_2() {
+        //                     ------- D -----------> B2
+        //                   /
+        //        --- * --- B --- C ---- E ---------> B1
+        //      /                 \
+        //    /                    -------- F ------> B3
+        // -- A ------------------------------ G ---> B0
+        //                                      \
+        //                                       ---- H -> B4
+        let mut r = Graph::new();
+        let b0 = r.init();
 
-        g.commit(&b0);
-        let m = g.commit(&b0);
-        let b1 = g.fork(&b0);
-        g.commit(&b1);
-        g.commit(&b0);
-        let b = g.commit(&b1);
-        let a = g.commit(&b0);
+        let a = r.commit(&b0);
+        let b1 = r.fork(&b0);
+        r.commit(&b1);
+        let b = r.commit(&b1);
+        let b2 = r.fork(&b1);
+        let c = r.commit(&b1);
+        let d = r.commit(&b2);
+        let b3 = r.fork(&b1);
+        let e = r.commit(&b1);
+        let f = r.commit(&b3);
+        let g = r.commit(&b0);
+        let b4 = r.fork(&b0);
+        let h = r.commit(&b4);
 
-        let mut count = 0;
-        let mut get = |k: &commit::CommitIdentifier| {
-            count += 1;
-            g.get_commit(k)
+        let test = |commits: Vec<commit::CommitIdentifier>,
+                    expected_count: usize,
+                    result: commit::CommitIdentifier| {
+            let mut count = 0;
+            let mut get = |k: &commit::CommitIdentifier| {
+                count += 1;
+                r.get_commit(k)
+            };
+            assert_eq!(lca(&mut get, commits).unwrap(), result);
+            assert_eq!(count, expected_count);
         };
-        assert_eq!(lca(&mut get, vec![a, b]).unwrap(), m);
-        assert_eq!(count, 2);
+
+        // Probably the most common case, we fork from a branch and then merge it back.
+        test(vec![e, f], 2, c);
+        test(vec![g, h], 2, g);
+        // Distance = 1
+        test(vec![d, f], 2, b);
+        // etc...
+        test(vec![f, h], 3, a);
+        test(vec![g, c], 2, a);
     }
 }
