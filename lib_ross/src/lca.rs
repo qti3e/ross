@@ -35,7 +35,7 @@ fn lca2<'a>(
     seen.insert(commit_b.branch, None);
 
     let mut q_slice: [Option<commit::CommitIdentifier>; 2] = [None; 2];
-    let mut q = fixed_queue::FixedSizeQueue::new(&mut q_slice);
+    let mut q = rb::RingBuffer::new(&mut q_slice);
 
     if let Some((branch, id)) = commit_b.fork_point {
         match seen.insert(branch, Some((id, commit_b.time))) {
@@ -57,8 +57,7 @@ fn lca2<'a>(
         q.enqueue(id);
     }
 
-    while !q.is_empty() {
-        let id = q.dequeue();
+    while let Some(id) = q.dequeue() {
         let commit = get_commit_fn(&id)?;
         if commit.fork_point.is_none() {
             continue;

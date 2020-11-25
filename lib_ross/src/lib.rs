@@ -10,10 +10,10 @@ pub mod context;
 pub mod db;
 pub mod drop_map;
 pub mod error;
-pub mod fixed_queue;
 pub mod hash;
 pub mod lca;
 pub mod log;
+pub mod rb;
 pub mod session;
 pub mod snapshot;
 
