@@ -1,18 +1,18 @@
-use crate::*;
+use crate::prelude::*;
 use std::collections::HashMap;
 
 pub struct LcaCommitData {
     time: Timestamp,
-    branch: branch::BranchIdentifier,
-    fork_point: Option<(branch::BranchIdentifier, commit::CommitIdentifier)>,
+    branch: BranchIdentifier,
+    fork_point: Option<(BranchIdentifier, CommitIdentifier)>,
 }
 
 /// Find the lowest common ancestor between a set of commits, the LCA can be
 /// used as the merge-base.
 pub fn lca<'a>(
     get_commit_fn: &mut impl FnMut(&commit::CommitIdentifier) -> error::Result<&'a LcaCommitData>,
-    commits: Vec<commit::CommitIdentifier>,
-) -> error::Result<commit::CommitIdentifier> {
+    commits: Vec<CommitIdentifier>,
+) -> error::Result<CommitIdentifier> {
     if commits.len() == 2 {
         lca2(get_commit_fn, &commits[0], &commits[1])
     } else {
@@ -22,10 +22,10 @@ pub fn lca<'a>(
 }
 
 fn lca2<'a>(
-    get_commit_fn: &mut impl FnMut(&commit::CommitIdentifier) -> error::Result<&'a LcaCommitData>,
-    a: &commit::CommitIdentifier,
-    b: &commit::CommitIdentifier,
-) -> error::Result<commit::CommitIdentifier> {
+    get_commit_fn: &mut impl FnMut(&CommitIdentifier) -> error::Result<&'a LcaCommitData>,
+    a: &CommitIdentifier,
+    b: &CommitIdentifier,
+) -> error::Result<CommitIdentifier> {
     let mut commit_a = get_commit_fn(a)?;
     let mut commit_b = get_commit_fn(b)?;
     let min = if commit_b.time > commit_a.time {
@@ -40,11 +40,11 @@ fn lca2<'a>(
     }
 
     let mut seen =
-        HashMap::<branch::BranchIdentifier, Option<(commit::CommitIdentifier, Timestamp)>>::with_capacity(8);
+        HashMap::<BranchIdentifier, Option<(CommitIdentifier, Timestamp)>>::with_capacity(8);
     seen.insert(commit_a.branch, None);
     seen.insert(commit_b.branch, None);
 
-    let mut q_slice: [Option<commit::CommitIdentifier>; 2] = [None; 2];
+    let mut q_slice: [Option<CommitIdentifier>; 2] = [None; 2];
     let mut q = rb::RingBuffer::new(&mut q_slice);
 
     if let Some((branch, id)) = commit_b.fork_point {
@@ -103,14 +103,14 @@ mod test {
     use std::collections::HashMap;
 
     struct BranchData {
-        fork_point: Option<(branch::BranchIdentifier, commit::CommitIdentifier)>,
-        head: Option<commit::CommitIdentifier>,
+        fork_point: Option<(BranchIdentifier, CommitIdentifier)>,
+        head: Option<CommitIdentifier>,
     }
 
     struct Graph {
         time: Timestamp,
-        commits: HashMap<commit::CommitIdentifier, LcaCommitData>,
-        branches: HashMap<branch::BranchIdentifier, BranchData>,
+        commits: HashMap<CommitIdentifier, LcaCommitData>,
+        branches: HashMap<BranchIdentifier, BranchData>,
     }
 
     impl Graph {
@@ -122,8 +122,8 @@ mod test {
             }
         }
 
-        pub fn init(&mut self) -> branch::BranchIdentifier {
-            let id = branch::BranchIdentifier {
+        pub fn init(&mut self) -> BranchIdentifier {
+            let id = BranchIdentifier {
                 repository: RepositoryID::MIN,
                 uuid: BranchID::rand(),
             };
@@ -139,8 +139,8 @@ mod test {
             id
         }
 
-        pub fn commit(&mut self, branch: &branch::BranchIdentifier) -> commit::CommitIdentifier {
-            let id = commit::CommitIdentifier {
+        pub fn commit(&mut self, branch: &BranchIdentifier) -> CommitIdentifier {
+            let id = CommitIdentifier {
                 repository: RepositoryID::MIN,
                 hash: CommitID::rand(),
             };
@@ -161,8 +161,8 @@ mod test {
             id
         }
 
-        pub fn fork(&mut self, branch: &branch::BranchIdentifier) -> branch::BranchIdentifier {
-            let id = branch::BranchIdentifier {
+        pub fn fork(&mut self, branch: &BranchIdentifier) -> BranchIdentifier {
+            let id = BranchIdentifier {
                 repository: RepositoryID::MIN,
                 uuid: BranchID::rand(),
             };
@@ -180,7 +180,7 @@ mod test {
             id
         }
 
-        pub fn get_commit(&self, id: &commit::CommitIdentifier) -> error::Result<&LcaCommitData> {
+        pub fn get_commit(&self, id: &CommitIdentifier) -> error::Result<&LcaCommitData> {
             self.commits
                 .get(id)
                 .ok_or_else(|| error::Error::CommitNotFound)

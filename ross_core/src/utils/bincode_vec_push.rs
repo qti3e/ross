@@ -1,7 +1,11 @@
 use bincode::{deserialize, serialize_into};
 
+/// Push number of new items that are already serialized into an optional already-serialized vector
+/// of elements (`existing`), if the first value is not provided a new vector with `len=0` is
+/// created and used instead.
+/// This function is used in `DB` as our RocksDB's merge operator for values of type `Vec`.
 #[inline]
-pub fn merge<'a>(existing: Option<&[u8]>, items: impl Iterator<Item = &'a [u8]>) -> Vec<u8> {
+pub fn merge_push<'a>(existing: Option<&[u8]>, items: impl Iterator<Item = &'a [u8]>) -> Vec<u8> {
     let mut first = true;
     let est_count = items.size_hint().0;
 
@@ -31,7 +35,7 @@ pub fn merge<'a>(existing: Option<&[u8]>, items: impl Iterator<Item = &'a [u8]>)
 
 #[cfg(test)]
 mod test {
-    use super::merge;
+    use super::merge_push;
     use bincode::{deserialize, serialize};
     use serde::{Deserialize, Serialize};
 
@@ -57,7 +61,8 @@ mod test {
         };
 
         let existing_serialized = existing.clone().map(|v| serialize(&v).unwrap());
-        let result_serialized = merge(existing_serialized.as_deref(), items_serialized.into_iter());
+        let result_serialized =
+            merge_push(existing_serialized.as_deref(), items_serialized.into_iter());
         let result_decoded = deserialize::<Vec<Item>>(&result_serialized).unwrap();
 
         let mut result = Vec::new();

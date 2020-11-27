@@ -1,107 +1,43 @@
-use crate::Timestamp;
-use std::collections::hash_map;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use super::clock;
+use super::small_set::SmallSet;
+use std::collections::{hash_map, BTreeMap, HashMap};
 use std::fmt;
 use std::hash::Hash;
 
-/// A map that drops its elements after an expiration time if they are
-/// not accessed until then. This map always returns a clone of the value.
+/// A map that drops its elements after an expiration time, if they are
+/// accessed until then the expiration time gets invalidated.
 pub struct DropMap<K, V> {
+    data: HashMap<K, Entry<V>>,
     /// How many to-be-dropped elements are we allowed to hold until we
     /// trigger the GC.
-    capacity: usize,
+    drop_queue_capacity: usize,
+    drop_queue: BTreeMap<clock::Timestamp, SmallSet<K>>,
     to_drop_count: usize,
-    data: HashMap<K, Entry<V>>,
-    drop_queue: BTreeMap<Timestamp, SmallSet<K>>,
 }
 
 struct Entry<V> {
     value: V,
-    expiration: Option<Timestamp>,
+    expiration: Option<clock::Timestamp>,
 }
 
-enum SmallSet<T> {
-    Empty,
-    Single(T),
-    Double(T, T),
-    Multi(BTreeSet<T>),
-}
-
-impl<T: Ord + Copy> SmallSet<T> {
-    #[inline]
-    pub fn is_empty(&self) -> bool {
-        match &self {
-            SmallSet::Empty => true,
-            _ => false,
-        }
-    }
-
-    #[inline]
-    pub fn insert(&mut self, item: T) {
-        match self {
-            SmallSet::Empty => {
-                *self = SmallSet::Single(item);
-            }
-            SmallSet::Single(other) if other != &item => {
-                *self = SmallSet::Double(*other, item);
-            }
-            SmallSet::Double(a, b) if a != &item && b != &item => {
-                let mut set = BTreeSet::new();
-                set.insert(*a);
-                set.insert(*b);
-                set.insert(item);
-                *self = SmallSet::Multi(set);
-            }
-            SmallSet::Multi(set) => {
-                set.insert(item);
-            }
-            _ => {}
-        }
-    }
-
-    #[inline]
-    pub fn remove(&mut self, item: &T) {
-        match self {
-            SmallSet::Single(other) if other == item => {
-                *self = SmallSet::Empty;
-            }
-            SmallSet::Double(a, b) if a == item => {
-                *self = SmallSet::Single(*b);
-            }
-            SmallSet::Double(a, b) if b == item => {
-                *self = SmallSet::Single(*a);
-            }
-            SmallSet::Multi(set) => {
-                set.remove(item);
-                if set.len() == 2 {
-                    let mut iter = set.iter();
-                    let a = iter.next().unwrap();
-                    let b = iter.next().unwrap();
-                    *self = SmallSet::Double(*a, *b);
-                }
-            }
-            _ => {}
-        }
-    }
-}
-
-impl<K: Ord + Copy + Hash, V: Clone> DropMap<K, V> {
-    pub fn new(capacity: usize) -> Self {
+impl<K: Copy + Hash + Eq, V: Clone> DropMap<K, V> {
+    pub fn new(drop_queue_capacity: usize, capacity: Option<usize>) -> Self {
         DropMap {
-            capacity,
-            to_drop_count: 0,
-            data: HashMap::new(),
+            data: HashMap::with_capacity(capacity.unwrap_or(8)),
+            drop_queue_capacity,
             drop_queue: BTreeMap::new(),
+            to_drop_count: 0,
         }
     }
 
     /// Return the element from the map with the given key or insert the one
-    /// returned by the provided closure.
+    /// returned by the provided closure, the closure may fail in that case
+    /// the error returned by the closure will be returned.
     pub fn get_or_maybe_insert_with<F: FnOnce() -> Result<V, E>, E: fmt::Debug>(
         &mut self,
         key: K,
         f: F,
-    ) -> Result<V, E> {
+    ) -> Result<&V, E> {
         let data = match self.data.entry(key) {
             hash_map::Entry::Occupied(o) => o.into_mut(),
             hash_map::Entry::Vacant(v) => {
@@ -123,12 +59,12 @@ impl<K: Ord + Copy + Hash, V: Clone> DropMap<K, V> {
 
         // This map always returns a clone of the data, it's supposed to work with
         // `RC`, `Arc`, `Box` and other smart pointers.
-        Ok(data.value.clone())
+        Ok(&data.value)
     }
 
     /// Set an expiration date on the key, we will wait at least until the expiration
     /// time to actually drop the content.
-    pub fn drop(&mut self, key: K, expiration: Timestamp) {
+    pub fn drop(&mut self, key: K, expiration: clock::Timestamp) {
         if let Some(data) = self.data.get_mut(&key) {
             if let Some(e) = data.expiration {
                 cancel_drop(&mut self.drop_queue, &key, e);
@@ -142,15 +78,15 @@ impl<K: Ord + Copy + Hash, V: Clone> DropMap<K, V> {
                 .insert(key);
         }
 
-        if self.to_drop_count >= self.capacity {
+        if self.to_drop_count >= self.drop_queue_capacity {
             self.gc();
         }
     }
 
-    /// Fore run the garbage collector.
+    /// Force run the garbage collector.
     #[inline(always)]
     pub fn gc(&mut self) {
-        let now = crate::now();
+        let now = clock::now();
         let to_delete = self.drop_queue.split_off(&now);
         for (_, items) in to_delete {
             match items {
@@ -176,10 +112,10 @@ impl<K: Ord + Copy + Hash, V: Clone> DropMap<K, V> {
 }
 
 #[inline(always)]
-fn cancel_drop<K: Ord + Copy>(
-    map: &mut BTreeMap<Timestamp, SmallSet<K>>,
+fn cancel_drop<K: Eq + Hash + Copy>(
+    map: &mut BTreeMap<clock::Timestamp, SmallSet<K>>,
     key: &K,
-    expiration: Timestamp,
+    expiration: clock::Timestamp,
 ) {
     let mut remove = false;
     map.entry(expiration).and_modify(|e| {
