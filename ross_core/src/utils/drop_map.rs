@@ -10,9 +10,10 @@ pub struct DropMap<K, V> {
     data: HashMap<K, Entry<V>>,
     /// How many to-be-dropped elements are we allowed to hold until we
     /// trigger the GC.
-    drop_queue_capacity: usize,
+    capacity: usize,
     drop_queue: BTreeMap<clock::Timestamp, SmallSet<K>>,
     to_drop_count: usize,
+    ttl: clock::Timestamp
 }
 
 struct Entry<V> {
@@ -21,13 +22,20 @@ struct Entry<V> {
 }
 
 impl<K: Copy + Hash + Eq, V: Clone> DropMap<K, V> {
-    pub fn new(drop_queue_capacity: usize, capacity: Option<usize>) -> Self {
+    pub fn new(capacity: usize, ttl: clock::Timestamp) -> Self {
         DropMap {
-            data: HashMap::with_capacity(capacity.unwrap_or(8)),
-            drop_queue_capacity,
+            data: HashMap::with_capacity(capacity + 1),
+            capacity,
             drop_queue: BTreeMap::new(),
             to_drop_count: 0,
+            ttl
         }
+    }
+
+    /// Current number of elements in the map.
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.data.len()
     }
 
     /// Return the element from the map with the given key or insert the one
@@ -64,7 +72,8 @@ impl<K: Copy + Hash + Eq, V: Clone> DropMap<K, V> {
 
     /// Set an expiration date on the key, we will wait at least until the expiration
     /// time to actually drop the content.
-    pub fn drop(&mut self, key: K, expiration: clock::Timestamp) {
+    pub fn drop(&mut self, key: K, now: clock::Timestamp) {
+        let expiration = now + self.ttl;
         if let Some(data) = self.data.get_mut(&key) {
             if let Some(e) = data.expiration {
                 cancel_drop(&mut self.drop_queue, &key, e);
@@ -78,15 +87,14 @@ impl<K: Copy + Hash + Eq, V: Clone> DropMap<K, V> {
                 .insert(key);
         }
 
-        if self.to_drop_count >= self.drop_queue_capacity {
-            self.gc();
+        if self.to_drop_count >= self.capacity {
+            self.gc(now);
         }
     }
 
     /// Force run the garbage collector.
-    #[inline(always)]
-    pub fn gc(&mut self) {
-        let now = clock::now();
+    #[inline]
+    pub fn gc(&mut self, now: clock::Timestamp) {
         let to_delete = self.drop_queue.split_off(&now);
         for (_, items) in to_delete {
             match items {

@@ -34,7 +34,7 @@ pub type ForkPoint = Option<(BranchIdentifier, CommitIdentifier)>;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct BranchInfo {
     /// Current head of the commit.
-    pub head: CommitIdentifier,
+    pub head: Option<CommitIdentifier>,
     /// If `head` is the last commit on a branch, `fork_point` is the tail.  
     /// See [ForkPoint](ForkPoint).
     pub fork_point: ForkPoint,
