@@ -1,8 +1,8 @@
+use crate::db::{DBSync, DB};
 use crate::prelude::*;
 use crate::utils::drop_map::DropMap;
 use crate::{options, sync};
-use crate::db::{DBSync, DB};
-use rand::{Rng, rngs::ThreadRng};
+use rand::{rngs::ThreadRng, Rng};
 
 sync!(ContextSync(Context) {});
 
@@ -35,9 +35,9 @@ options!(CreateBranchOptionsBuilder(CreateBranchOptions) {
 /// Context is the central controller of each project, usually there is only one
 /// initiated instance of Context in an entire project.
 pub struct Context {
-    pub db: DBSync,
-    pub sessions: DropMap<BranchIdentifier, SessionSync>,
-    pub rng: ThreadRng
+    db: DBSync,
+    sessions: DropMap<BranchIdentifier, SessionSync>,
+    rng: ThreadRng,
 }
 
 impl Context {
@@ -46,7 +46,7 @@ impl Context {
         Self {
             db: DBSync::new(DB::open(&options.path)),
             sessions: DropMap::new(options.session_cache_capacity, options.session_ttl),
-            rng: rand::thread_rng()
+            rng: rand::thread_rng(),
         }
     }
 
@@ -64,9 +64,9 @@ impl Context {
 
     /// Open a new session on the given branch.
     pub fn open_session(&mut self, branch: BranchIdentifier, user: UserId) -> Result<SessionSync> {
-        self.sessions.get_or_maybe_insert_with(branch, || {
-            unimplemented!()
-        }).map(|x| x.open(user))
+        self.sessions
+            .get_or_maybe_insert_with(branch, || unimplemented!())
+            .map(|x| x.open(user))
     }
 
     /// Internal method, called by SessionSync to inform us that a branch is dropped.

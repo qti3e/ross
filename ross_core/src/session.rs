@@ -1,6 +1,6 @@
+use crate::db::DBSync;
 use crate::prelude::*;
 use crate::sync;
-use crate::db::DBSync;
 
 sync!(SessionSync(Session) {
   /// The id of the branch.
@@ -13,35 +13,38 @@ sync!(SessionSync(Session) {
 });
 
 impl Drop for SessionSync {
-  fn drop(&mut self) {
-    let rc = std::sync::Arc::strong_count(&self.inner);
-    // Why 2? When this method is called our content is not dropped yet, so
-    // we are still keeping a reference to the inner Arc (1 ref), we also always
-    // have a reference to the session in the context, which is another ref.
-    // So when we reach 2 references, it basically means no one is actually
-    // listening to this session anymore and we are free to drop it from the map.
-    if rc == 2 {
-      if let Ok(mut ctx) = self.ctx.write() {
-          ctx.drop_session(self.id);
-      }
+    fn drop(&mut self) {
+        let rc = std::sync::Arc::strong_count(&self.inner);
+        // Why 2? When this method is called our content is not dropped yet, so
+        // we are still keeping a reference to the inner Arc (1 ref), we also always
+        // have a reference to the session in the context, which is another ref.
+        // So when we reach 2 references, it basically means no one is actually
+        // listening to this session anymore and we are free to drop it from the map.
+        if rc == 2 {
+            if let Ok(mut ctx) = self.ctx.write() {
+                ctx.drop_session(self.id);
+            }
+        }
     }
-  }
 }
 
 impl SessionSync {
-  pub fn open(&self, user: UserId) -> Self {
-    let mut cloned = self.clone();
-    cloned.user = Some(user);
-    cloned
-  }
+    pub fn open(&self, user: UserId) -> Self {
+        let mut cloned = self.clone();
+        cloned.user = Some(user);
+        cloned
+    }
 }
 
 pub struct Session {
-  db: DBSync
+    db: DBSync,
+    snapshot: Snapshot,
 }
 
 impl Session {
-  pub fn perform() -> Result<()> { todo!() }
+    pub fn perform(&mut self) -> Result<()> {
+        todo!()
+    }
 
-  pub fn sync() {}
+    pub fn sync() {}
 }

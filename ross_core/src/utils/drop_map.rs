@@ -13,7 +13,7 @@ pub struct DropMap<K, V> {
     capacity: usize,
     drop_queue: BTreeMap<clock::Timestamp, SmallSet<K>>,
     to_drop_count: usize,
-    ttl: clock::Timestamp
+    ttl: clock::Timestamp,
 }
 
 struct Entry<V> {
@@ -28,7 +28,7 @@ impl<K: Copy + Hash + Eq, V: Clone> DropMap<K, V> {
             capacity,
             drop_queue: BTreeMap::new(),
             to_drop_count: 0,
-            ttl
+            ttl,
         }
     }
 
@@ -134,3 +134,5 @@ fn cancel_drop<K: Eq + Hash + Copy>(
         map.remove(&expiration);
     }
 }
+
+// TODO(qti3e) Test drop map.
