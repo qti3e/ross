@@ -107,6 +107,7 @@ impl Snapshot {
             return Some(conflicts);
         }
 
+        let mut updated = HashSet::<ObjectId>::new();
         for patch in &batch.patches {
             match patch {
                 Patch::Create { id, data } => {
@@ -120,7 +121,9 @@ impl Snapshot {
                 } => {
                     let obj = self.0.get_mut(id).unwrap();
                     obj.1.set(*field, target.clone());
-                    obj.0 += 1;
+                    if updated.insert(*id) {
+                        obj.0 += 1;
+                    }
                 }
             }
         }
