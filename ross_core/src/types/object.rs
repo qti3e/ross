@@ -37,7 +37,7 @@ impl ObjectData {
         if idx < self.0.len() {
             self.0[idx].clone()
         } else {
-            PrimitiveValue::Null(())
+            PrimitiveValue::Null
         }
     }
 
@@ -49,7 +49,7 @@ impl ObjectData {
         } else {
             let r = idx - self.0.len();
             for _ in 0..r {
-                self.0.push(PrimitiveValue::Null(()));
+                self.0.push(PrimitiveValue::Null);
             }
             self.0.push(value);
         }

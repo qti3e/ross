@@ -11,11 +11,12 @@ use std::fmt;
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 // #[serde(untagged)]
 pub enum PrimitiveValue {
-    Bool(bool),
+    Null,
+    True,
+    False,
     Hash16(Hash16),
     String(String),
     Number(Number),
-    Null(()),
 }
 
 /// A floating point number.
@@ -65,7 +66,7 @@ impl fmt::Debug for Number {
 
 impl From<()> for PrimitiveValue {
     fn from(_: ()) -> Self {
-        PrimitiveValue::Null(())
+        PrimitiveValue::Null
     }
 }
 
@@ -77,7 +78,11 @@ impl From<String> for PrimitiveValue {
 
 impl From<bool> for PrimitiveValue {
     fn from(v: bool) -> Self {
-        PrimitiveValue::Bool(v)
+        if v {
+            PrimitiveValue::True
+        } else {
+            PrimitiveValue::False
+        }
     }
 }
 
@@ -141,8 +146,9 @@ mod test_primitive {
     #[test]
     fn json() {
         println!("JSON");
-        same!(PrimitiveValue::Null(()), "null");
-        same!(PrimitiveValue::Bool(true), "true");
+        same!(PrimitiveValue::Null, "null");
+        same!(PrimitiveValue::True, "true");
+        same!(PrimitiveValue::False, "true");
         same!(PrimitiveValue::Number(6.0.into()), "6");
         same!(PrimitiveValue::Number(0.0.into()), "0");
         same!(

@@ -1,6 +1,7 @@
 use crate::db::DBSync;
 use crate::prelude::*;
 use crate::sync;
+use serde::{Deserialize, Serialize};
 
 sync!(SessionSync(Session) {
   /// The id of the branch.
@@ -39,12 +40,32 @@ impl SessionSync {
 pub struct Session {
     db: DBSync,
     snapshot: Snapshot,
+    branch: BranchInfo,
+    live_changes: Vec<BatchPatch>,
 }
 
 impl Session {
-    pub fn perform(&mut self) -> Result<()> {
-        todo!()
+    /// Called by a synced client to perform a transaction, the response
+    /// is a result, if `Ok`, the value needs to be broadcasted to other
+    /// users, the `Err` however needs to be sent to the client who
+    /// initiated the request.
+    pub fn perform(&mut self, batch: BatchPatch) {
+        match self.snapshot.apply_batch_patch(&batch.patches, false) {
+            Ok(revert_patch) => {}
+            Err(conflicts) => {}
+        }
     }
 
-    pub fn sync() {}
+    pub fn sync(&self) {}
+
+    pub fn partial_sync(&mut self, head: SessionHead, batches: Vec<BatchPatch>) {}
+}
+
+/// Head of the session.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SessionHead {
+    /// Hash of the latest commit in the session.
+    commit: CommitHash,
+    /// Index of the last transaction after the head commit.
+    live: usize,
 }

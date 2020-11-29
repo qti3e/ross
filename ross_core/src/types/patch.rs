@@ -8,6 +8,7 @@ pub enum Patch {
     Create {
         id: ObjectId,
         data: ObjectData,
+        version: Option<ObjectVersion>,
     },
     Delete {
         id: ObjectId,
@@ -28,4 +29,8 @@ pub struct BatchPatch {
     pub author: UserId,
     pub action: ActionKind,
     pub time: Timestamp,
+}
+
+pub fn pack(batches: Vec<&Vec<Patch>>) -> Vec<Patch> {
+    unimplemented!()
 }

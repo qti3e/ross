@@ -55,10 +55,10 @@ impl Snapshot {
     /// Part of the `apply_batch_patch`, but in it's separated to ensure that it's not mutable,
     /// and can not change the state in case there are conflicts. (it's not `&mut self`.)
     #[inline]
-    fn collect_conflicts(&self, batch: &BatchPatch) -> Vec<PatchConflict> {
+    fn collect_conflicts(&self, patches: &Vec<Patch>) -> Vec<PatchConflict> {
         let mut conflicts = Vec::<PatchConflict>::new();
 
-        for patch in &batch.patches {
+        for patch in patches {
             match patch {
                 Patch::Create { id, .. } => {
                     if self.0.contains_key(id) {
@@ -101,33 +101,75 @@ impl Snapshot {
 
     /// Apply an atomic batch of updates or return the conflicts that prevented the transaction
     //// to finish.
-    pub fn apply_batch_patch(&mut self, batch: &BatchPatch) -> Option<Vec<PatchConflict>> {
-        let conflicts = self.collect_conflicts(batch);
-        if !conflicts.is_empty() {
-            return Some(conflicts);
+    /// This function returns a revert patch that can only be called immediately to revert this
+    /// patch, when calling this method to revert the patches `is_revert` should be set to true.
+    pub fn apply_batch_patch(
+        &mut self,
+        patches: &Vec<Patch>,
+        is_revert: bool,
+    ) -> std::result::Result<Vec<Patch>, Vec<PatchConflict>> {
+        // Revert patches are trusted.
+        if !is_revert {
+            let conflicts = self.collect_conflicts(patches);
+            if !conflicts.is_empty() {
+                return Err(conflicts);
+            }
         }
 
+        let collect_revert = !is_revert;
+        let mut revert = Vec::<Patch>::with_capacity(patches.len());
         let mut updated = HashSet::<ObjectId>::new();
-        for patch in &batch.patches {
+        for patch in patches {
             match patch {
-                Patch::Create { id, data } => {
-                    self.0.insert(*id, (0, data.clone()));
+                Patch::Create { id, data, version } => {
+                    let ver = version.unwrap_or(0);
+                    self.0.insert(*id, (ver, data.clone()));
+                    if collect_revert {
+                        revert.push(Patch::Delete {
+                            id: *id,
+                            version: ver,
+                        });
+                    }
                 }
                 Patch::Delete { id, .. } => {
-                    self.0.remove(id);
+                    if let Some((version, data)) = self.0.remove(id) {
+                        if collect_revert {
+                            revert.push(Patch::Create {
+                                id: *id,
+                                data,
+                                version: Some(version),
+                            });
+                        }
+                    }
                 }
                 Patch::CAS {
-                    id, field, target, ..
+                    id,
+                    field,
+                    target,
+                    base,
                 } => {
                     let obj = self.0.get_mut(id).unwrap();
                     obj.1.set(*field, target.clone());
                     if updated.insert(*id) {
-                        obj.0 += 1;
+                        if is_revert {
+                            obj.0 -= 1;
+                        } else {
+                            obj.0 += 1;
+                        }
+                    }
+                    if collect_revert {
+                        revert.push(Patch::CAS {
+                            id: *id,
+                            field: *field,
+                            base: target.clone(),
+                            target: base.clone(),
+                        });
                     }
                 }
             }
         }
 
-        None
+        revert.reverse();
+        Ok(revert)
     }
 }
