@@ -16,30 +16,37 @@ impl Snapshot {
     /// this method to work properly, `base` must be an ancestor of the current snapshot.
     pub fn diff_relative_to_base(&self, base: &Snapshot) -> CompactDelta {
         let mut delta = CompactDelta::default();
-        let mut unvisited: HashSet<&ObjectId> = self.0.keys().collect();
 
-        for (id, (base_version, base_data)) in &base.0 {
-            if unvisited.remove(id) {
-                let (version, data) = self.0.get(id).unwrap();
+        let mut unvisited_base: HashSet<&ObjectId> = base.0.keys().collect();
+        for (id, (version, data)) in &self.0 {
+            if unvisited_base.remove(id) {
+                let (base_version, base_data) = base.0.get(id).unwrap();
                 // This snapshot is derived from the base, so if the versions are the same
                 // that means data is untouched.
                 if version == base_version {
                     continue;
                 }
                 // Figure out what has changed.
-                for (field, (base, current)) in base_data.iter().zip(data.iter()).enumerate() {
-                    if base == current {
-                        continue;
+                for i in 0..base_data.len() {
+                    let base = base_data.get(i);
+                    let current = data.get(i);
+                    if base != current {
+                        delta.field_change.push((*id, i, current.clone()));
                     }
-                    delta.set(*id, field as u8, current.clone());
                 }
-                continue;
+                // New elements.
+                for i in base_data.len()..data.len() {
+                    let current = data.get(i);
+                    delta.field_change.push((*id, i, current.clone()));
+                }
+            } else {
+                // Element is in self but not in base -> created
+                delta.inserted.push((*id, data.clone()));
             }
-            delta.create(*id, base_data.clone())
         }
 
-        for id in unvisited.into_iter() {
-            delta.delete(id.clone());
+        for id in unvisited_base.into_iter() {
+            delta.deleted.push(*id);
         }
 
         delta
@@ -113,6 +120,7 @@ impl Snapshot {
                 } => {
                     let obj = self.0.get_mut(id).unwrap();
                     obj.1.set(*field, target.clone());
+                    obj.0 += 1;
                 }
             }
         }

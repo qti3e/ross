@@ -18,6 +18,7 @@ pub type Object = (ObjectVersion, ObjectData);
 /// The data of an object as explained in `Object`.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ObjectData(Vec<PrimitiveValue>);
+// TODO(qti3e) In Patch::Create, make sure the given ObjectData has a valid len.
 
 /// The field of the object, it is the index of an item in Object.1#Vec.
 /// u8 might seem small because usually a usize is used for indexing
@@ -25,6 +26,11 @@ pub struct ObjectData(Vec<PrimitiveValue>);
 pub type FieldId = u8;
 
 impl ObjectData {
+    #[inline]
+    pub fn len(&self) -> u8 {
+        self.0.len() as u8
+    }
+
     #[inline]
     pub fn get(&self, field: FieldId) -> PrimitiveValue {
         let idx = field as usize;
