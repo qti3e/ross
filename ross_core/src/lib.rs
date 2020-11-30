@@ -8,9 +8,9 @@ pub mod types;
 pub mod utils;
 
 mod context;
+mod editor;
 mod error;
-mod session;
 
 pub use context::*;
+pub use editor::*;
 pub use error::*;
-pub use session::*;

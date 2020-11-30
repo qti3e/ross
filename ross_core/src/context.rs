@@ -9,14 +9,14 @@ sync!(ContextSync(Context) {});
 options!(ContextOptionsBuilder(ContextOptions) {
     /// Directory to be used to store the data.
     path: String = None,
-    /// How long should we wait to drop a session with no active connections in ms.
+    /// How long should we wait to drop a editor with no active connections in ms.
     /// (Default: 3 Min)
-    session_ttl: Timestamp = Some(180 * 1000),
-    /// Number of open sessions we are allowed to keep until triggering the GC.
+    editor_ttl: Timestamp = Some(180 * 1000),
+    /// Number of open editors we are allowed to keep until triggering the GC.
     /// (Default: 64)
-    session_cache_capacity: usize = Some(64),
-    /// Maximum number of sessions we're allowed to have, 0 means unlimited.
-    max_number_of_sessions: usize = Some(0)
+    editors_cache_capacity: usize = Some(64),
+    /// Maximum number of editor we're allowed to have, 0 means unlimited.
+    max_number_of_editors: usize = Some(0)
 });
 
 options!(CreateBranchOptionsBuilder(CreateBranchOptions) {
@@ -36,7 +36,7 @@ options!(CreateBranchOptionsBuilder(CreateBranchOptions) {
 /// initiated instance of Context in an entire project.
 pub struct Context {
     db: DBSync,
-    sessions: DropMap<BranchIdentifier, SessionSync>,
+    editors: DropMap<BranchIdentifier, EditorSync>,
     rng: ThreadRng,
 }
 
@@ -45,7 +45,7 @@ impl Context {
     pub fn new(options: &ContextOptions) -> Self {
         Self {
             db: DBSync::new(DB::open(&options.path)),
-            sessions: DropMap::new(options.session_cache_capacity, options.session_ttl),
+            editors: DropMap::new(options.editors_cache_capacity, options.editor_ttl),
             rng: rand::thread_rng(),
         }
     }
@@ -62,15 +62,15 @@ impl Context {
         unimplemented!()
     }
 
-    /// Open a new session on the given branch.
-    pub fn open_session(&mut self, branch: BranchIdentifier, user: UserId) -> Result<SessionSync> {
-        self.sessions
+    /// Open a new editor on the given branch.
+    pub fn open_editor(&mut self, branch: BranchIdentifier, user: UserId) -> Result<EditorSync> {
+        self.editors
             .get_or_maybe_insert_with(branch, || unimplemented!())
             .map(|x| x.open(user))
     }
 
-    /// Internal method, called by SessionSync to inform us that a branch is dropped.
-    pub(crate) fn drop_session(&mut self, branch: BranchIdentifier) {
-        self.sessions.drop(branch, now());
+    /// Internal method, called by EditorSync to inform us that a branch is dropped.
+    pub(crate) fn drop_editor(&mut self, branch: BranchIdentifier) {
+        self.editors.drop(branch, now());
     }
 }

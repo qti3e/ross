@@ -11,4 +11,4 @@ pub type UserId = Hash16;
 pub type ActionKind = i16;
 
 pub use crate::context::*;
-pub use crate::session::*;
+pub use crate::editor::*;

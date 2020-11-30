@@ -3,33 +3,33 @@ use crate::prelude::*;
 use crate::sync;
 use serde::{Deserialize, Serialize};
 
-sync!(SessionSync(Session) {
+sync!(EditorSync(Editor) {
   /// The id of the branch.
   id: BranchIdentifier,
   /// Reference to the context, we store it so that we can inform context
-  /// when the session needs to be dropped.
+  /// when the editor needs to be dropped.
   ctx: ContextSync,
-  /// The user who is listening to this session.
+  /// The user who is listening to this editor.
   user: Option<UserId>
 });
 
-impl Drop for SessionSync {
+impl Drop for EditorSync {
     fn drop(&mut self) {
         let rc = std::sync::Arc::strong_count(&self.inner);
         // Why 2? When this method is called our content is not dropped yet, so
         // we are still keeping a reference to the inner Arc (1 ref), we also always
-        // have a reference to the session in the context, which is another ref.
+        // have a reference to the editor in the context, which is another ref.
         // So when we reach 2 references, it basically means no one is actually
-        // listening to this session anymore and we are free to drop it from the map.
+        // listening to this editor anymore and we are free to drop it from the map.
         if rc == 2 {
             if let Ok(mut ctx) = self.ctx.write() {
-                ctx.drop_session(self.id);
+                ctx.drop_editor(self.id);
             }
         }
     }
 }
 
-impl SessionSync {
+impl EditorSync {
     pub fn open(&self, user: UserId) -> Self {
         let mut cloned = self.clone();
         cloned.user = Some(user);
@@ -37,7 +37,8 @@ impl SessionSync {
     }
 }
 
-pub struct Session {
+/// A real-time editor on top of a branch, it should be guarded with `EditorSync`.
+pub struct Editor {
     db: DBSync,
     snapshot: Snapshot,
     id: BranchIdentifier,
@@ -45,15 +46,15 @@ pub struct Session {
     head: CommitHash,
 }
 
-impl Session {
+impl Editor {
     /// Called by a synced client to perform a transaction.
-    pub fn perform(&mut self, batch: BatchPatch) -> Result<Response> {
+    pub fn perform(&mut self, batch: BatchPatch) -> Result<EditorResponse> {
         let revert_patch = match self.snapshot.apply_batch_patch(&batch.patches, false) {
             Ok(revert_patch) => revert_patch,
             Err(conflicts) => {
-                return Ok(Response {
+                return Ok(EditorResponse {
                     others: None,
-                    current: Some(Message::Conflicts(conflicts)),
+                    current: Some(EditorMessage::Conflicts(conflicts)),
                 })
             }
         };
@@ -67,8 +68,8 @@ impl Session {
         match do_write() {
             Ok(()) => {
                 self.live_changes.push(batch);
-                Ok(Response {
-                    others: Some(Message::Patch(self.live_changes.last().unwrap())),
+                Ok(EditorResponse {
+                    others: Some(EditorMessage::Patch(self.live_changes.last().unwrap())),
                     current: None,
                 })
             }
@@ -82,8 +83,8 @@ impl Session {
     }
 
     /// Performs the initial sync.
-    pub fn sync(&self) -> Message {
-        Message::FullSync {
+    pub fn sync(&self) -> EditorMessage {
+        EditorMessage::FullSync {
             head: SessionHead {
                 commit: self.head,
                 live: self.live_changes.len(),
@@ -98,7 +99,7 @@ impl Session {
         &mut self,
         head: SessionHead,
         batches: Vec<BatchPatch>,
-    ) -> Result<Response> {
+    ) -> Result<EditorResponse> {
         let same_commit = self.head == head.commit;
         let same_live = self.live_changes.len() == head.live;
 
@@ -106,7 +107,10 @@ impl Session {
             (true, true, 0) => {
                 // There were no activities both on the server and the client while
                 // the user was offline. -> Don't do anything.
-                unimplemented!();
+                Ok(EditorResponse {
+                    others: None,
+                    current: None,
+                })
             }
             (true, true, _) => {
                 // There were no activities on the server while the user was offline,
@@ -116,7 +120,7 @@ impl Session {
             }
             (true, false, 0) => {
                 // There were no new commits, but there were some changes on the server,
-                // but on the side of the user.
+                // but nothing on the user's side.
                 // -> We only need to sync the current client.
                 unimplemented!();
             }
@@ -130,7 +134,10 @@ impl Session {
             (false, _, 0) => {
                 // There was a commit, but no new changes were made by the user.
                 // So just send a full-sync response, the user will figure out the delta.
-                unimplemented!();
+                Ok(EditorResponse {
+                    others: None,
+                    current: Some(self.sync()),
+                })
             }
             (false, _, _) => {
                 // There was a commit, and new changes were made by the user.
@@ -143,19 +150,19 @@ impl Session {
 
     /// Commit the live changes, it will only commit the changes if the head given
     /// in parameters is still valid.
-    /// We may introduce `lock` and `unlock` to lock a session temporarily before
+    /// We may introduce `lock` and `unlock` to lock an editor temporarily before
     /// sending the commit request.
     pub fn commit(
         &mut self,
         user: UserId,
         head: SessionHead,
-        message: Message,
-    ) -> Result<Response> {
+        message: EditorMessage,
+    ) -> Result<EditorResponse> {
         unimplemented!()
     }
 }
 
-/// Head of the session.
+/// The state that a client is in a editor.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SessionHead {
     /// Hash of the latest commit in the session.
@@ -166,7 +173,7 @@ pub struct SessionHead {
 
 /// A message sent from the server to the client.
 #[derive(Debug, Serialize)]
-pub enum Message<'a> {
+pub enum EditorMessage<'a> {
     /// The perform request had conflicts and therefore was not applied.
     Conflicts(Vec<PatchConflict>),
     /// A patch that needs to applied on the client side.
@@ -183,7 +190,7 @@ pub enum Message<'a> {
 /// user and the other needs to be sent to the user who initiated the
 /// request.
 #[derive(Debug, Serialize)]
-pub struct Response<'a> {
-    pub others: Option<Message<'a>>,
-    pub current: Option<Message<'a>>,
+pub struct EditorResponse<'a> {
+    pub others: Option<EditorMessage<'a>>,
+    pub current: Option<EditorMessage<'a>>,
 }
