@@ -2,7 +2,7 @@ use crate::prelude::*;
 use serde::{Deserialize, Serialize};
 
 /// A patch is a diff that contains information about the base.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum Patch {
     Create {
@@ -23,7 +23,7 @@ pub enum Patch {
 }
 
 /// An atomic batch of patches.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BatchPatch {
     pub patches: Vec<Patch>,
     pub author: UserId,

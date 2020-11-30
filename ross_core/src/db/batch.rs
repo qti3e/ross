@@ -1,4 +1,4 @@
-use super::DBKey;
+use super::keys::DBKey;
 
 /// An atomic batch of write operations. This is a type safe wrapper around
 /// rocksdb::WriteBatch.

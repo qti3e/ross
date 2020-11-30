@@ -1,4 +1,7 @@
-use super::{Batch, DBKey, PartialDBKey};
+use super::{
+    keys::{DBKey, PartialDBKey},
+    Batch,
+};
 use crate::utils::bincode_vec_push::merge_push;
 use crate::{sync, Error, Result};
 
@@ -63,6 +66,16 @@ impl DB {
         };
         let data = bincode::deserialize(bytes.as_ref()).unwrap();
         Ok(Some(data))
+    }
+
+    #[inline(always)]
+    pub fn push<K, I: serde::Serialize>(&mut self, key: K, item: &I) -> Result<()>
+    where
+        K: DBKey<Vec<I>>,
+    {
+        let key = bincode::serialize(&key.key()).unwrap();
+        let item = bincode::serialize(item).unwrap();
+        self.db.merge(key, item).map_err(|e| Error::DBError(e))
     }
 }
 

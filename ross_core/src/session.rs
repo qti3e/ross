@@ -1,4 +1,4 @@
-use crate::db::DBSync;
+use crate::db::{keys, DBSync};
 use crate::prelude::*;
 use crate::sync;
 use serde::{Deserialize, Serialize};
@@ -40,19 +40,36 @@ impl SessionSync {
 pub struct Session {
     db: DBSync,
     snapshot: Snapshot,
+    id: BranchIdentifier,
     branch: BranchInfo,
     live_changes: Vec<BatchPatch>,
 }
 
 impl Session {
-    /// Called by a synced client to perform a transaction, the response
-    /// is a result, if `Ok`, the value needs to be broadcasted to other
-    /// users, the `Err` however needs to be sent to the client who
-    /// initiated the request.
-    pub fn perform(&mut self, batch: BatchPatch) {
-        match self.snapshot.apply_batch_patch(&batch.patches, false) {
-            Ok(revert_patch) => {}
-            Err(conflicts) => {}
+    /// Called by a synced client to perform a transaction.
+    pub fn perform(&mut self, batch: BatchPatch) -> Result<Response> {
+        let revert_patch = match self.snapshot.apply_batch_patch(&batch.patches, false) {
+            Ok(revert_patch) => revert_patch,
+            Err(conflicts) => return Ok(Response::PerformConflicts(conflicts)),
+        };
+
+        let do_write = || -> Result<()> {
+            let mut db = self.db.write()?;
+            db.push(keys::LiveChanges(self.id), &batch)?;
+            Ok(())
+        };
+
+        match do_write() {
+            Ok(()) => {
+                self.live_changes.push(batch.clone());
+                Ok(Response::BroadcastBatchPatch(batch))
+            }
+            Err(error) => {
+                self.snapshot
+                    .apply_batch_patch(&revert_patch, true)
+                    .unwrap();
+                Err(error)
+            }
         }
     }
 
@@ -68,4 +85,11 @@ pub struct SessionHead {
     commit: CommitHash,
     /// Index of the last transaction after the head commit.
     live: usize,
+}
+
+#[derive(Debug, Serialize)]
+pub enum Response {
+    None,
+    PerformConflicts(Vec<PatchConflict>),
+    BroadcastBatchPatch(BatchPatch),
 }

@@ -12,6 +12,8 @@ db_keys!(DBKey(Key) {
   Branches(RepositoryId) -> Vec<BranchId>,
   /// Store/retrieve the information about a branch.
   Branch(BranchIdentifier) -> BranchInfo,
+  /// Map each branch into a list of live/unstaged changes.
+  LiveChanges(BranchIdentifier) -> Vec<BatchPatch>,
   /// Store the information regarding each commit.
   Commit(CommitIdentifier) -> CommitInfo,
   /// Delta of the commit relative to the parent.
