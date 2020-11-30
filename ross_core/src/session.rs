@@ -61,8 +61,10 @@ impl Session {
 
         match do_write() {
             Ok(()) => {
-                self.live_changes.push(batch.clone());
-                Ok(Response::BroadcastBatchPatch(batch))
+                self.live_changes.push(batch);
+                Ok(Response::BroadcastBatchPatch(
+                    self.live_changes.last().unwrap(),
+                ))
             }
             Err(error) => {
                 self.snapshot
@@ -73,7 +75,16 @@ impl Session {
         }
     }
 
-    pub fn sync(&self) {}
+    /// Performs the initial sync.
+    pub fn sync(&self) -> Result<Response> {
+        Ok(Response::FullSync {
+            head: SessionHead {
+                commit: self.branch.head.unwrap().hash,
+                live: self.live_changes.len(),
+            },
+            snapshot: &self.snapshot,
+        })
+    }
 
     pub fn partial_sync(&mut self, head: SessionHead, batches: Vec<BatchPatch>) {}
 }
@@ -88,8 +99,17 @@ pub struct SessionHead {
 }
 
 #[derive(Debug, Serialize)]
-pub enum Response {
+pub enum Response<'a> {
+    /// Don't do anything.
     None,
+    /// The perform request had conflicts and therefore was not applied.
+    /// Send this list of conflicts to the current user.
     PerformConflicts(Vec<PatchConflict>),
-    BroadcastBatchPatch(BatchPatch),
+    /// Broadcast this patch to everyone except the current user.
+    BroadcastBatchPatch(&'a BatchPatch),
+    /// Needs to sent to the current user.
+    FullSync {
+        head: SessionHead,
+        snapshot: &'a Snapshot,
+    },
 }
