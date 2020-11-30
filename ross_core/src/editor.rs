@@ -1,4 +1,4 @@
-use crate::db::{keys, DBSync};
+use crate::db::{keys, Batch, DBSync};
 use crate::prelude::*;
 use crate::sync;
 use serde::{Deserialize, Serialize};
@@ -93,6 +93,71 @@ impl Editor {
         }
     }
 
+    /// Perform a list of batches atomically, either does all the changes or none, this
+    /// method is part of the `partial_sync`.
+    fn perform_many(&mut self, mut batches: Vec<BatchPatch>) -> Result<EditorResponse> {
+        if batches.len() == 0 {
+            return Ok(EditorResponse {
+                others: None,
+                current: None,
+            });
+        }
+
+        if batches.len() == 1 {
+            let batch = batches.pop().unwrap();
+            return self.perform(batch);
+        }
+
+        let len = self.live_changes.len();
+        let mut revert_patches = Vec::<Vec<Patch>>::with_capacity(batches.len());
+        let mut write_batch = Batch::new();
+
+        for batch in batches {
+            match self.snapshot.apply_batch_patch(&batch.patches, false) {
+                Ok(r) => {
+                    write_batch.push(keys::LiveChanges(self.id), &batch);
+                    self.live_changes.push(batch);
+                    revert_patches.push(r);
+                }
+                Err(conflicts) => {
+                    // Rollback.
+                    self.live_changes.truncate(len);
+                    revert_patches.reverse();
+                    for patch in revert_patches {
+                        self.snapshot.apply_batch_patch(&patch, true).unwrap();
+                    }
+                    // Return.
+                    return Ok(EditorResponse {
+                        others: None,
+                        current: Some(EditorMessage::Conflicts(conflicts)),
+                    });
+                }
+            }
+        }
+
+        let do_write = || -> Result<()> {
+            let mut db = self.db.write()?;
+            db.perform(write_batch)?;
+            Ok(())
+        };
+
+        match do_write() {
+            Ok(()) => Ok(EditorResponse {
+                others: Some(EditorMessage::Patches(self.live_changes.split_at(len).1)),
+                current: None,
+            }),
+            Err(error) => {
+                // Rollback.
+                self.live_changes.truncate(len);
+                revert_patches.reverse();
+                for patch in revert_patches {
+                    self.snapshot.apply_batch_patch(&patch, true).unwrap();
+                }
+                Err(error)
+            }
+        }
+    }
+
     /// A partial sync happens when reconnecting to the server after a period in which
     /// the user was offline.
     pub fn partial_sync(
@@ -116,13 +181,20 @@ impl Editor {
                 // There were no activities on the server while the user was offline,
                 // but there were changes made by the user in that period.
                 // -> Sync the server and other users.
-                unimplemented!();
+                // In this case we don't expect any kind of conflict, and if there is
+                // a conflict, there is actually something wrong with the client.
+                self.perform_many(batches)
             }
             (true, false, 0) => {
                 // There were no new commits, but there were some changes on the server,
                 // but nothing on the user's side.
                 // -> We only need to sync the current client.
-                unimplemented!();
+                Ok(EditorResponse {
+                    others: None,
+                    current: Some(EditorMessage::Patches(
+                        self.live_changes.split_at(head.live).1,
+                    )),
+                })
             }
             (true, false, _) => {
                 // There were no new commits, but there were some changes on both server,
@@ -183,6 +255,7 @@ pub enum EditorMessage<'a> {
         head: SessionHead,
         snapshot: &'a Snapshot,
     },
+    Patches(&'a [BatchPatch]),
 }
 
 /// Result of an action on the session which is two optional messages,
