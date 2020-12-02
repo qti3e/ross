@@ -38,6 +38,8 @@ db_keys!(DBKey(Key) {
 });
 
 db_partial_keys!(DBKey(Key)::PartialDBKey {
+  /// Only used to check whether a repo exists or not.
+  Repository(RepositoryId)::RepositoryExist -> (),
   /// Get the number of branches owned by a repository.
   Branches(RepositoryId)::NumberOfBranches -> u64,
   /// Head of a branch.

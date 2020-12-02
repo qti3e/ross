@@ -53,7 +53,15 @@ impl Context {
 
     /// Create and initialize a new repository owned by the given user.
     pub fn create_repository(&mut self, user: UserId) -> Result<RepositoryId> {
-        let repository_id = self.rng.gen::<RepositoryId>();
+        let repository_id = {
+            let db = self.db.read()?;
+            loop {
+                let id = self.rng.gen::<RepositoryId>();
+                if db.get_partial(keys::RepositoryExist(id))?.is_none() {
+                    break id;
+                }
+            }
+        };
         let time = now();
         let mut batch = Batch::new();
         batch.put(
