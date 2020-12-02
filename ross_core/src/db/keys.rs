@@ -43,5 +43,5 @@ db_partial_keys!(DBKey(Key)::PartialDBKey {
   /// Head of a branch.
   Branch(BranchIdentifier)::BranchHead -> CommitIdentifier,
   /// Get the frequently accessed origin info of a commit.
-  Commit(CommitIdentifier)::CommitOrigin -> CommitOrigin
+  Commit(CommitIdentifier)::CommitOrigin -> CommitOriginInfo
 });

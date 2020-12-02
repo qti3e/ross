@@ -11,6 +11,12 @@ pub enum SnapshotRef {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Snapshot(HashMap<ObjectId, Object>);
 
+impl Default for Snapshot {
+    fn default() -> Self {
+        Snapshot(HashMap::new())
+    }
+}
+
 impl Snapshot {
     /// Compute the diff of this snapshot relative to a base, note that in order for
     /// this method to work properly, `base` must be an ancestor of the current snapshot.

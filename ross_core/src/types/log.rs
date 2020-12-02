@@ -10,7 +10,7 @@ pub enum LogEvent {
     },
     BranchCreated {
         id: BranchId,
-        head: Option<CommitHash>,
+        head: CommitHash,
         user: UserId,
         time: Timestamp,
     },

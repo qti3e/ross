@@ -1,3 +1,4 @@
+use crate::db::{keys, Batch};
 use crate::prelude::*;
 use serde::{Deserialize, Serialize};
 use sha1::{Digest, Sha1};
@@ -11,6 +12,15 @@ pub type CommitHash = Hash20;
 pub struct CommitIdentifier {
     pub repository: RepositoryId,
     pub hash: CommitHash,
+}
+
+impl Default for CommitIdentifier {
+    fn default() -> Self {
+        CommitIdentifier {
+            repository: RepositoryId::MIN,
+            hash: CommitHash::MIN,
+        }
+    }
 }
 
 /// The beginning part of the `CommitInfo` struct, a lot of times, we only
@@ -79,5 +89,50 @@ impl CommitInfo {
         hasher.update(data);
         let slice: [u8; 20] = hasher.finalize().into();
         CommitHash::from(slice)
+    }
+
+    /// Write the operations required to store this commit in the given DB batch.
+    pub fn write_commit(
+        &self,
+        batch: &mut Batch,
+        snapshot: &Snapshot,
+        delta: &CompactDelta,
+    ) -> CommitIdentifier {
+        let repository = self.origin.branch.repository;
+        let hash = self.hash();
+        let id = CommitIdentifier { repository, hash };
+        // 1. Log the event.
+        // 2. Store the info.
+        // 3. Store the snapshot.
+        // 4. Store the delta.
+        batch.push(
+            keys::Log(repository),
+            &LogEvent::Committed {
+                branch: self.origin.branch.uuid,
+                hash,
+                user: self.committer,
+                time: self.time,
+            },
+        );
+        batch.put(keys::Commit(id), &self);
+        batch.put(keys::CommitSnapshot(id), &snapshot);
+        batch.put(keys::CommitDelta(id), &delta);
+        id
+    }
+
+    /// Create an init commit (first commit of the repository).
+    pub fn init(branch: BranchIdentifier, time: Timestamp, user: UserId) -> Self {
+        CommitInfo {
+            origin: CommitOriginInfo {
+                branch,
+                fork_point: None,
+                order: 0,
+            },
+            time,
+            parents: vec![],
+            committer: user,
+            authors: vec![],
+            message: "Init".into(),
+        }
     }
 }

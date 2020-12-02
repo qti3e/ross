@@ -22,7 +22,7 @@ options!(ContextOptionsBuilder(ContextOptions) {
 
 options!(CreateBranchOptionsBuilder(CreateBranchOptions) {
     /// Head of the commit.
-    head: Option<CommitIdentifier> = Some(None),
+    head: CommitIdentifier = None,
     /// Name of the branch. (Required)
     title: String = None,
     /// The user who created the commit. (Required)
@@ -53,27 +53,62 @@ impl Context {
 
     /// Create and initialize a new repository owned by the given user.
     pub fn create_repository(&mut self, user: UserId) -> Result<RepositoryId> {
-        let id = self.rng.gen::<RepositoryId>();
+        let repository_id = self.rng.gen::<RepositoryId>();
         let time = now();
         let mut batch = Batch::new();
         batch.put(
-            keys::Repository(id),
+            keys::Repository(repository_id),
             &RepositoryInfo {
                 user,
                 time,
                 fork_of: None,
             },
         );
-        batch.put(keys::Branches(id), &vec![]);
-        batch.push(keys::Log(id), &LogEvent::Init { user, time });
-        // TODO(qti3e) Initial branch.
-        // unimplemented!();
-        Ok(id)
+        batch.push(keys::Log(repository_id), &LogEvent::Init { user, time });
+        let mut branch = BranchInfo::init(time, user);
+        let branch_uuid = branch.hash();
+        let commit = CommitInfo::init(
+            BranchIdentifier {
+                repository: repository_id,
+                uuid: branch_uuid,
+            },
+            time,
+            user,
+        );
+        let commit_id =
+            commit.write_commit(&mut batch, &Snapshot::default(), &CompactDelta::default());
+        branch.head = commit_id;
+        branch.write_branch(&mut batch, repository_id, Some(branch_uuid));
+        self.db.write()?.perform(batch)?;
+        Ok(repository_id)
     }
 
     /// Create a new branch by forking another head.
-    pub fn create_branch(&mut self, _options: CreateBranchOptions) -> Result<BranchIdentifier> {
-        unimplemented!()
+    pub fn create_branch(&mut self, options: CreateBranchOptions) -> Result<BranchIdentifier> {
+        let repository = options.head.repository;
+        let head_origin = {
+            self.db
+                .read()?
+                .get_partial(keys::CommitOrigin(options.head))?
+                .ok_or(Error::CommitNotFound)?
+        };
+
+        let fork_point: ForkPoint = Some((head_origin.branch, options.head));
+
+        let branch = BranchInfo {
+            head: options.head,
+            fork_point,
+            created_at: now(),
+            user: options.user,
+            is_static: options.is_static,
+            is_archived: options.is_archived,
+            title: options.title,
+        };
+
+        let mut batch = Batch::new();
+        let id = branch.write_branch(&mut batch, repository, None);
+        self.db.write()?.perform(batch)?;
+        Ok(id)
     }
 
     /// Open a new editor on the given branch.
