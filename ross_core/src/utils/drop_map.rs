@@ -12,7 +12,7 @@ pub struct DropMap<K, V> {
     /// trigger the GC.
     capacity: usize,
     drop_queue: BTreeMap<clock::Timestamp, SmallSet<K>>,
-    to_drop_count: usize,
+    pub(self) to_drop_count: usize,
     ttl: clock::Timestamp,
 }
 
@@ -36,6 +36,11 @@ impl<K: Copy + Hash + Eq, V: Clone> DropMap<K, V> {
     #[inline]
     pub fn len(&self) -> usize {
         self.data.len()
+    }
+
+    #[inline]
+    pub fn contains_key(&self, key: &K) -> bool {
+        self.data.contains_key(key)
     }
 
     /// Return the element from the map with the given key or insert the one
@@ -73,20 +78,28 @@ impl<K: Copy + Hash + Eq, V: Clone> DropMap<K, V> {
     /// Set an expiration date on the key, we will wait at least until the expiration
     /// time to actually drop the content.
     pub fn drop(&mut self, key: K, now: clock::Timestamp) {
-        let expiration = now + self.ttl;
-        if let Some(data) = self.data.get_mut(&key) {
-            if let Some(e) = data.expiration {
-                cancel_drop(&mut self.drop_queue, &key, e);
-                self.to_drop_count -= 1;
+        if self.ttl == 0 {
+            if let Some(entry) = self.data.remove(&key) {
+                if let Some(e) = entry.expiration {
+                    cancel_drop(&mut self.drop_queue, &key, e);
+                    self.to_drop_count -= 1;
+                }
             }
-            data.expiration = Some(expiration);
-            self.to_drop_count += 1;
-            self.drop_queue
-                .entry(expiration)
-                .or_insert_with(|| SmallSet::Empty)
-                .insert(key);
+        } else {
+            let expiration = now + self.ttl;
+            if let Some(data) = self.data.get_mut(&key) {
+                if let Some(e) = data.expiration {
+                    cancel_drop(&mut self.drop_queue, &key, e);
+                    self.to_drop_count -= 1;
+                }
+                data.expiration = Some(expiration);
+                self.to_drop_count += 1;
+                self.drop_queue
+                    .entry(expiration)
+                    .or_insert_with(|| SmallSet::Empty)
+                    .insert(key);
+            }
         }
-
         if self.to_drop_count >= self.capacity {
             self.gc(now);
         }
@@ -95,7 +108,13 @@ impl<K: Copy + Hash + Eq, V: Clone> DropMap<K, V> {
     /// Force run the garbage collector.
     #[inline]
     pub fn gc(&mut self, now: clock::Timestamp) {
-        let to_delete = self.drop_queue.split_off(&now);
+        let to_delete = {
+            let e = now + 1;
+            let mut keep = self.drop_queue.split_off(&e);
+            std::mem::swap(&mut self.drop_queue, &mut keep);
+            keep
+        };
+
         for (_, items) in to_delete {
             match items {
                 SmallSet::Empty => {}
@@ -135,4 +154,80 @@ fn cancel_drop<K: Eq + Hash + Copy>(
     }
 }
 
-// TODO(qti3e) Test drop map.
+#[cfg(test)]
+mod test {
+    use super::DropMap;
+    use std::error::Error;
+    use std::fmt;
+
+    #[derive(Debug, PartialEq)]
+    pub enum MapError {
+        CustomError,
+    }
+
+    impl Error for MapError {}
+
+    impl fmt::Display for MapError {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(f, "{:?}", self)
+        }
+    }
+
+    #[test]
+    fn cache() {
+        let mut count = 0;
+        let mut getter = || -> Result<String, MapError> {
+            count += 1;
+            Ok(String::from("Hello"))
+        };
+
+        let mut map = DropMap::<i32, String>::new(3, 0);
+        assert_eq!(
+            map.get_or_maybe_insert_with(0, || getter()),
+            Ok(&String::from("Hello"))
+        );
+        assert_eq!(
+            map.get_or_maybe_insert_with(0, || getter()),
+            Ok(&String::from("Hello"))
+        );
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn error() {
+        let getter = || -> Result<String, MapError> { Err(MapError::CustomError) };
+        let mut map = DropMap::<i32, String>::new(3, 0);
+        assert_eq!(
+            map.get_or_maybe_insert_with(0, getter),
+            Err(MapError::CustomError)
+        );
+    }
+
+    #[test]
+    fn gc() {
+        let mut map = DropMap::<i32, i32>::new(2, 1);
+        map.get_or_maybe_insert_with(0, || -> Result<i32, MapError> { Ok(1) })
+            .unwrap();
+        map.get_or_maybe_insert_with(1, || -> Result<i32, MapError> { Ok(10) })
+            .unwrap();
+        map.get_or_maybe_insert_with(2, || -> Result<i32, MapError> { Ok(10) })
+            .unwrap();
+        // Time = 1
+        map.drop(0, 1);
+        assert_eq!(map.len(), 3);
+        // Time = 2
+        map.drop(1, 2);
+        assert_eq!(map.contains_key(&0), false);
+        assert_eq!(map.contains_key(&1), true);
+        assert_eq!(map.contains_key(&2), true);
+        assert_eq!(map.len(), 2);
+        assert_eq!(map.to_drop_count, 1);
+        // Time = 3
+        map.gc(3);
+        assert_eq!(map.contains_key(&0), false);
+        assert_eq!(map.contains_key(&1), false);
+        assert_eq!(map.contains_key(&2), true);
+        assert_eq!(map.len(), 1);
+        assert_eq!(map.to_drop_count, 0);
+    }
+}
