@@ -1,7 +1,8 @@
-use crate::db::{DBSync, DB};
+use crate::db::{keys, Batch, DBSync, DB};
 use crate::prelude::*;
 use crate::utils::drop_map::DropMap;
 use crate::{options, sync};
+use crossbeam::sync::ShardedLockReadGuard;
 use rand::{rngs::ThreadRng, Rng};
 
 sync!(ContextSync(Context) {});
@@ -51,8 +52,21 @@ impl Context {
     }
 
     /// Create and initialize a new repository owned by the given user.
-    pub fn create_repository(&mut self, _user: UserId) -> Result<RepositoryId> {
+    pub fn create_repository(&mut self, user: UserId) -> Result<RepositoryId> {
         let id = self.rng.gen::<RepositoryId>();
+        let time = now();
+        let mut batch = Batch::new();
+        batch.put(
+            keys::Repository(id),
+            &RepositoryInfo {
+                user,
+                time,
+                fork_of: None,
+            },
+        );
+        batch.put(keys::Branches(id), &vec![]);
+        batch.push(keys::Log(id), &LogEvent::Init { user, time });
+        // TODO(qti3e) Initial branch.
         // unimplemented!();
         Ok(id)
     }
@@ -63,9 +77,46 @@ impl Context {
     }
 
     /// Open a new editor on the given branch.
-    pub fn open_editor(&mut self, branch: BranchIdentifier, user: UserId) -> Result<EditorSync> {
-        self.editors
-            .get_or_maybe_insert_with(branch, || unimplemented!())
+    pub fn open_editor(
+        &mut self,
+        sync: &ContextSync,
+        branch_id: BranchIdentifier,
+        user: UserId,
+    ) -> Result<EditorSync> {
+        // Just to make borrow-checker happy.
+        let (editors, db) = (&mut self.editors, &mut self.db);
+
+        let open_editor = || {
+            // All of the db reads are placed in one scope so we drop the read-lock faster.
+            let (info, mut snapshot, live_changes) = {
+                let db = db.read()?;
+                let info = db
+                    .get(keys::Branch(branch_id))?
+                    .ok_or(Error::BranchNotFound)?;
+                let commit_snapshot = checkout(&db, info.head)?;
+                let live_changes = db.get(keys::LiveChanges(branch_id))?.unwrap_or(Vec::new());
+                (info, commit_snapshot, live_changes)
+            };
+
+            for batch in &live_changes {
+                snapshot
+                    .apply_batch_patch(&batch.patches, false)
+                    .map_err(|_| Error::CheckoutFailed)?;
+            }
+
+            let editor = Editor {
+                db: db.clone(),
+                snapshot,
+                id: branch_id,
+                live_changes,
+                info,
+            };
+
+            Ok(EditorSync::new(editor, branch_id, sync.clone(), None))
+        };
+
+        editors
+            .get_or_maybe_insert_with(branch_id, open_editor)
             .map(|x| x.open(user))
     }
 
@@ -73,4 +124,14 @@ impl Context {
     pub(crate) fn drop_editor(&mut self, branch: BranchIdentifier) {
         self.editors.drop(branch, now());
     }
+}
+
+#[inline]
+fn checkout(db: &ShardedLockReadGuard<DB>, head: CommitIdentifier) -> Result<Snapshot> {
+    // TODO(qti3e) This method needs to be improved:
+    // 1. Use SnapshotRef instead of snapshot.
+    // 2. If the snapshot is not available (might be lost) compute it from the delta.
+    // 3. LFU cache.
+    db.get(keys::CommitSnapshot(head))?
+        .ok_or(Error::CheckoutFailed)
 }

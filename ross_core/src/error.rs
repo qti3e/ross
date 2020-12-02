@@ -10,6 +10,8 @@ pub enum Error {
     AcquireLock,
     LcaNotFound,
     CommitNotFound,
+    BranchNotFound,
+    CheckoutFailed,
 }
 
 impl error::Error for Error {
@@ -30,6 +32,8 @@ impl fmt::Display for Error {
             Error::AcquireLock => write!(f, "Could not acquire a lock."),
             Error::LcaNotFound => write!(f, "Could not find LCA of two commits."),
             Error::CommitNotFound => write!(f, "Could not find the commit in DB."),
+            Error::BranchNotFound => write!(f, "Could not find the branch in DB."),
+            Error::CheckoutFailed => write!(f, "Checkout failed."),
         }
     }
 }

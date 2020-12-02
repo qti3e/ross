@@ -5,6 +5,7 @@ mod delta;
 mod log;
 mod object;
 mod patch;
+mod repository;
 mod snapshot;
 mod value;
 
@@ -15,5 +16,6 @@ pub use delta::*;
 pub use log::*;
 pub use object::*;
 pub use patch::*;
+pub use repository::*;
 pub use snapshot::*;
 pub use value::*;

@@ -6,7 +6,6 @@ pub use crate::utils::clock::*;
 pub(crate) use crate::error::*;
 pub use crate::types::*;
 
-pub type RepositoryId = Hash16;
 pub type UserId = Hash16;
 pub type ActionKind = i16;
 

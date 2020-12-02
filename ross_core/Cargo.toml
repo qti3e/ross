@@ -5,6 +5,11 @@ authors = ["Parsa Ghadimi <qti3eqti3e@gmail.com>"]
 edition = "2018"
 
 [dependencies]
+# Actix
+actix = "0.10.0"
+actix-web = "3.3.1"
+actix-web-actors = "3.0.0"
+# Core deps
 serde = { version="1.0.117", features=["derive"] }
 chrono = { version="0.4.19", features=["serde"] }
 rpds = { version = "0.8.0", features = ["serde"] }

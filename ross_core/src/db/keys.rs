@@ -8,6 +8,8 @@ use serde::{Deserialize, Serialize};
 db_keys!(DBKey(Key) {
   /// Log all the actions happening in a repository.
   Log(RepositoryId) -> Vec<LogEvent>,
+  // Information regarding each repository.
+  Repository(RepositoryId) -> RepositoryInfo,
   /// List of all the branches owned by the repository.
   Branches(RepositoryId) -> Vec<BranchId>,
   /// Store/retrieve the information about a branch.

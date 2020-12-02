@@ -30,7 +30,3 @@ pub struct BatchPatch {
     pub action: ActionKind,
     pub time: Timestamp,
 }
-
-pub fn pack(batches: Vec<&Vec<Patch>>) -> Vec<Patch> {
-    unimplemented!()
-}

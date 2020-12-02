@@ -39,11 +39,11 @@ impl EditorSync {
 
 /// A real-time editor on top of a branch, it should be guarded with `EditorSync`.
 pub struct Editor {
-    db: DBSync,
-    snapshot: Snapshot,
-    id: BranchIdentifier,
-    live_changes: Vec<BatchPatch>,
-    head: CommitHash,
+    pub(crate) db: DBSync,
+    pub(crate) snapshot: Snapshot,
+    pub(crate) live_changes: Vec<BatchPatch>,
+    pub(crate) id: BranchIdentifier,
+    pub(crate) info: BranchInfo,
 }
 
 impl Editor {
@@ -86,7 +86,7 @@ impl Editor {
     pub fn sync(&self) -> EditorMessage {
         EditorMessage::FullSync {
             head: SessionHead {
-                commit: self.head,
+                commit: self.info.head.hash,
                 live: self.live_changes.len(),
             },
             snapshot: &self.snapshot,
@@ -165,7 +165,7 @@ impl Editor {
         head: SessionHead,
         batches: Vec<BatchPatch>,
     ) -> Result<EditorResponse> {
-        let same_commit = self.head == head.commit;
+        let same_commit = self.info.head.hash == head.commit;
         let same_live = self.live_changes.len() == head.live;
 
         match (same_commit, same_live, batches.len()) {
