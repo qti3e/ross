@@ -1,16 +1,10 @@
 use crate::prelude::*;
 use std::collections::HashMap;
 
-pub struct LcaCommitData {
-    time: Timestamp,
-    branch: BranchIdentifier,
-    fork_point: Option<(BranchIdentifier, CommitIdentifier)>,
-}
-
 /// Find the lowest common ancestor between a set of commits, the LCA can be
 /// used as the merge-base.
 pub fn lca<'a>(
-    get_commit_fn: &mut impl FnMut(&commit::CommitIdentifier) -> error::Result<&'a LcaCommitData>,
+    get_commit_fn: &mut impl FnMut(&commit::CommitIdentifier) -> error::Result<&'a CommitOriginInfo>,
     commits: Vec<CommitIdentifier>,
 ) -> error::Result<CommitIdentifier> {
     if commits.len() == 2 {
@@ -22,13 +16,13 @@ pub fn lca<'a>(
 }
 
 fn lca2<'a>(
-    get_commit_fn: &mut impl FnMut(&CommitIdentifier) -> error::Result<&'a LcaCommitData>,
+    get_commit_fn: &mut impl FnMut(&CommitIdentifier) -> error::Result<&'a CommitOriginInfo>,
     a: &CommitIdentifier,
     b: &CommitIdentifier,
 ) -> error::Result<CommitIdentifier> {
     let mut commit_a = get_commit_fn(a)?;
     let mut commit_b = get_commit_fn(b)?;
-    let min = if commit_b.time > commit_a.time {
+    let min = if commit_b.order > commit_a.order {
         std::mem::swap(&mut commit_a, &mut commit_b);
         a
     } else {
@@ -40,7 +34,7 @@ fn lca2<'a>(
     }
 
     let mut seen =
-        HashMap::<BranchIdentifier, Option<(CommitIdentifier, Timestamp)>>::with_capacity(8);
+        HashMap::<BranchIdentifier, Option<(CommitIdentifier, u32)>>::with_capacity(8);
     seen.insert(commit_a.branch, None);
     seen.insert(commit_b.branch, None);
 
@@ -48,7 +42,7 @@ fn lca2<'a>(
     let mut q = rb::RingBuffer::new(&mut q_slice);
 
     if let Some((branch, id)) = commit_b.fork_point {
-        match seen.insert(branch, Some((id, commit_b.time))) {
+        match seen.insert(branch, Some((id, commit_b.order))) {
             Some(_) => {
                 return Ok(id);
             }
@@ -58,11 +52,11 @@ fn lca2<'a>(
     }
 
     if let Some((branch, id)) = commit_a.fork_point {
-        match seen.insert(branch, Some((id, commit_a.time))) {
+        match seen.insert(branch, Some((id, commit_a.order))) {
             Some(None) => {
                 return Ok(id);
             }
-            Some(Some((other, time))) if time < commit_a.time => {
+            Some(Some((other, order))) if order < commit_a.order => {
                 return Ok(other);
             }
             Some(Some(_)) => {
@@ -79,11 +73,11 @@ fn lca2<'a>(
             continue;
         }
         let (branch, id) = commit.fork_point.unwrap();
-        match seen.insert(branch, Some((id, commit.time))) {
+        match seen.insert(branch, Some((id, commit.order))) {
             Some(None) => {
                 return Ok(id);
             }
-            Some(Some((other, time))) if time < commit.time => {
+            Some(Some((other, order))) if order < commit.order => {
                 return Ok(other);
             }
             Some(Some(_)) => {
@@ -108,15 +102,15 @@ mod test {
     }
 
     struct Graph {
-        time: Timestamp,
-        commits: HashMap<CommitIdentifier, LcaCommitData>,
+        order: u32,
+        commits: HashMap<CommitIdentifier, CommitOriginInfo>,
         branches: HashMap<BranchIdentifier, BranchData>,
     }
 
     impl Graph {
         pub fn new() -> Self {
             Self {
-                time: 0,
+                order: 0,
                 commits: HashMap::new(),
                 branches: HashMap::new(),
             }
@@ -147,12 +141,12 @@ mod test {
 
             let b = self.branches.get_mut(branch).unwrap();
             b.head = Some(id);
-            let time = self.time;
-            self.time += 1;
+            let order = self.order;
+            self.order += 1;
             self.commits.insert(
                 id,
-                LcaCommitData {
-                    time,
+                CommitOriginInfo {
+                    order,
                     branch: *branch,
                     fork_point: b.fork_point,
                 },
@@ -180,7 +174,7 @@ mod test {
             id
         }
 
-        pub fn get_commit(&self, id: &CommitIdentifier) -> error::Result<&LcaCommitData> {
+        pub fn get_commit(&self, id: &CommitIdentifier) -> error::Result<&CommitOriginInfo> {
             self.commits
                 .get(id)
                 .ok_or_else(|| error::Error::CommitNotFound)

@@ -21,7 +21,12 @@ pub struct CommitIdentifier {
 pub struct CommitOriginInfo {
     pub branch: BranchIdentifier,
     pub fork_point: ForkPoint,
-    pub time: Timestamp,
+    /// An incremental numeric value that helps us decide if a commit is an
+    /// ancestor of another commit or not, this number is localized on each
+    /// branch, so we have `o1.branch == o2.branch`, comparing `order`s will
+    /// tell us whether `o1` precedes `o2` or not, but when
+    /// `o1.branch != o2.branch`, this number will not tell us anything.
+    pub order: u32,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -30,6 +35,7 @@ pub struct CommitInfo {
     // panics with `bincode`.
     // https://github.com/servo/bincode/issues/245)
     pub origin: CommitOriginInfo,
+    pub time: Timestamp,
     pub parents: Vec<CommitIdentifier>,
     pub committer: UserId,
     pub authors: Vec<UserId>,
@@ -55,7 +61,6 @@ impl CommitInfo {
         for parent in &self.parents {
             write!(&mut result, "parent {}\n", String::from(&parent.hash)).unwrap();
         }
-        write!(&mut result, "timestamp {}\n", self.origin.time).unwrap();
         write!(
             &mut result,
             "committed-by {}\n\n",
