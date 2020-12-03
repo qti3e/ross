@@ -8,7 +8,7 @@ use pest::{iterators::Pair, Parser};
 #[grammar = "ross.pest"]
 struct RossParser;
 
-pub fn parse(source: &str) -> Result<Vec<ast::Declaration>, BuilderError> {
+pub fn parse(source: &str) -> Result<ast::Mod, BuilderError> {
     let mut builder = ASTBuilder::new();
 
     let pairs = RossParser::parse(Rule::program, source).unwrap_or_else(|e| panic!("{}", e));

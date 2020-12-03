@@ -1,28 +1,29 @@
 use indexmap::IndexMap;
 
 #[derive(Debug)]
-pub enum Declaration {
-    Mod {
-        name: String,
-        declarations: Box<Vec<Declaration>>,
-    },
-    Struct {
-        name: String,
-        owner: Option<(String, String)>,
-        id: u32,
-        fields: IndexMap<String, Type>,
-        members: IndexMap<String, String>,
-    },
-    Action {
-        name: String,
-        id: u32,
-        parameters: IndexMap<String, Type>,
-        actions: Vec<Action>,
-    },
+pub struct Mod {
+    structs: IndexMap<String, Struct>,
+    actions: IndexMap<String, Action>,
+    mods: IndexMap<String, Mod>,
 }
 
 #[derive(Debug)]
-pub enum Action {
+pub struct Struct {
+    id: u32,
+    owner: Option<(String, String)>,
+    fields: IndexMap<String, Type>,
+    members: IndexMap<String, String>,
+}
+
+#[derive(Debug)]
+pub struct Action {
+    id: u32,
+    parameters: IndexMap<String, Type>,
+    actions: Vec<ActionAtom>,
+}
+
+#[derive(Debug)]
+pub enum ActionAtom {
     Insert {
         parameter_index: u8,
         parameter: String,
@@ -114,10 +115,9 @@ pub mod builder {
     enum State {
         Mod {
             name: Option<String>,
-            declarations: Vec<Declaration>,
-            struct_names: HashSet<String>,
-            action_names: HashSet<String>,
-            mod_names: HashSet<String>,
+            structs: IndexMap<String, Struct>,
+            actions: IndexMap<String, Action>,
+            mods: IndexMap<String, Mod>,
         },
         Struct {
             name: Option<String>,
@@ -131,7 +131,7 @@ pub mod builder {
             name: Option<String>,
             id: u32,
             parameters: IndexMap<String, Type>,
-            actions: Vec<Action>,
+            actions: Vec<ActionAtom>,
             parameter_name: Option<String>,
             parameter_type: Option<Type>,
         },
@@ -144,44 +144,40 @@ pub mod builder {
                 path: Vec::with_capacity(5),
                 state: State::Mod {
                     name: None,
-                    declarations: vec![],
-                    struct_names: HashSet::new(),
-                    action_names: HashSet::new(),
-                    mod_names: HashSet::new(),
+                    structs: IndexMap::new(),
+                    actions: IndexMap::new(),
+                    mods: IndexMap::new(),
                 },
             }
         }
 
         pub fn name(&mut self, n: String) -> Result<(), BuilderError> {
-            let used_names = match &mut self.state {
+            let name_used = match &mut self.state {
                 State::Mod { name, .. } => {
                     *name = Some(n.clone());
-                    self.frames.last_mut().map(|f| match f {
-                        State::Mod { mod_names, .. } => mod_names,
+                    self.frames.last().map(|f| match f {
+                        State::Mod { mods, .. } => mods.contains_key(&n),
                         _ => unreachable!(),
                     })
                 }
                 State::Struct { name, .. } => {
                     *name = Some(n.clone());
-                    self.frames.last_mut().map(|f| match f {
-                        State::Mod { struct_names, .. } => struct_names,
+                    self.frames.last().map(|f| match f {
+                        State::Mod { structs, .. } => structs.contains_key(&n),
                         _ => unreachable!(),
                     })
                 }
                 State::Action { name, .. } => {
                     *name = Some(n.clone());
-                    self.frames.last_mut().map(|f| match f {
-                        State::Mod { action_names, .. } => action_names,
+                    self.frames.last().map(|f| match f {
+                        State::Mod { actions, .. } => actions.contains_key(&n),
                         _ => unreachable!(),
                     })
                 }
             };
 
-            if let Some(map) = used_names {
-                if map.contains(&n) {
-                    return Err(BuilderError::NameAlreadyInUse(n));
-                }
-                map.insert(n);
+            if name_used.unwrap() {
+                return Err(BuilderError::NameAlreadyInUse(n));
             }
 
             Ok(())
@@ -189,16 +185,15 @@ pub mod builder {
 
         pub fn enter_mod(&mut self) -> Result<(), BuilderError> {
             let index = match &self.state {
-                State::Mod { mod_names, .. } => mod_names.len(),
+                State::Mod { mods, .. } => mods.len(),
                 _ => return Err(BuilderError::OperationOnInvalidState),
             };
 
             let mut next_state = State::Mod {
                 name: None,
-                declarations: vec![],
-                struct_names: HashSet::new(),
-                action_names: HashSet::new(),
-                mod_names: HashSet::new(),
+                structs: IndexMap::new(),
+                actions: IndexMap::new(),
+                mods: IndexMap::new(),
             };
 
             std::mem::swap(&mut next_state, &mut self.state);
@@ -214,13 +209,21 @@ pub mod builder {
             let mut state = self.frames.pop().unwrap();
             std::mem::swap(&mut state, &mut self.state);
 
-            let declaration = match state {
+            let (name, declaration) = match state {
                 State::Mod {
-                    name, declarations, ..
-                } => Declaration::Mod {
-                    name: name.ok_or(BuilderError::MissingModName)?,
-                    declarations: Box::new(declarations),
-                },
+                    name,
+                    mods,
+                    structs,
+                    actions,
+                    ..
+                } => (
+                    name.ok_or(BuilderError::MissingModName)?,
+                    Mod {
+                        mods,
+                        structs,
+                        actions,
+                    },
+                ),
                 mut state => {
                     std::mem::swap(&mut state, &mut self.state);
                     self.frames.push(state);
@@ -229,8 +232,8 @@ pub mod builder {
             };
 
             match &mut self.state {
-                State::Mod { declarations, .. } => {
-                    declarations.push(declaration);
+                State::Mod { mods, .. } => {
+                    mods.insert(name, declaration);
                     self.path.pop().unwrap();
                     Ok(())
                 }
@@ -240,7 +243,7 @@ pub mod builder {
 
         pub fn enter_struct(&mut self) -> Result<(), BuilderError> {
             let index = match &self.state {
-                State::Mod { struct_names, .. } => struct_names.len(),
+                State::Mod { structs, .. } => structs.len(),
                 _ => return Err(BuilderError::OperationOnInvalidState),
             };
 
@@ -264,20 +267,22 @@ pub mod builder {
             let mut state = self.frames.pop().unwrap();
             std::mem::swap(&mut state, &mut self.state);
 
-            let declaration = match state {
+            let (name, declaration) = match state {
                 State::Struct {
                     name,
                     id,
                     owner,
                     fields,
                     ..
-                } => Declaration::Struct {
-                    name: name.ok_or(BuilderError::MissingStructName)?,
-                    owner,
-                    id,
-                    fields,
-                    members: IndexMap::new(),
-                },
+                } => (
+                    name.ok_or(BuilderError::MissingStructName)?,
+                    Struct {
+                        owner,
+                        id,
+                        fields,
+                        members: IndexMap::new(),
+                    },
+                ),
                 mut state => {
                     std::mem::swap(&mut state, &mut self.state);
                     self.frames.push(state);
@@ -286,8 +291,8 @@ pub mod builder {
             };
 
             match &mut self.state {
-                State::Mod { declarations, .. } => {
-                    declarations.push(declaration);
+                State::Mod { structs, .. } => {
+                    structs.insert(name, declaration);
                     Ok(())
                 }
                 _ => unreachable!(),
@@ -350,26 +355,17 @@ pub mod builder {
             };
 
             let st = self.find_struct_mut(struct_name)?;
-
-            match st {
-                Declaration::Struct {
-                    fields, members, ..
-                } => {
-                    if fields.contains_key(field) || members.contains_key(field) {
-                        return Err(BuilderError::NameAlreadyInUse(field.into()));
-                    }
-
-                    members.insert(field.into(), name);
-                }
-                _ => unreachable!(),
+            if st.fields.contains_key(field) || st.members.contains_key(field) {
+                return Err(BuilderError::NameAlreadyInUse(field.into()));
             }
+            st.members.insert(field.into(), name);
 
             Ok(())
         }
 
         pub fn enter_action(&mut self) -> Result<(), BuilderError> {
             let index = match &self.state {
-                State::Mod { action_names, .. } => action_names.len(),
+                State::Mod { actions, .. } => actions.len(),
                 _ => return Err(BuilderError::OperationOnInvalidState),
             };
 
@@ -393,19 +389,21 @@ pub mod builder {
             let mut state = self.frames.pop().unwrap();
             std::mem::swap(&mut state, &mut self.state);
 
-            let declaration = match state {
+            let (name, declaration) = match state {
                 State::Action {
                     name,
                     id,
                     parameters,
                     actions,
                     ..
-                } => Declaration::Action {
-                    name: name.ok_or(BuilderError::MissingActionName)?,
-                    id,
-                    parameters,
-                    actions,
-                },
+                } => (
+                    name.ok_or(BuilderError::MissingActionName)?,
+                    Action {
+                        id,
+                        parameters,
+                        actions,
+                    },
+                ),
                 mut state => {
                     std::mem::swap(&mut state, &mut self.state);
                     self.frames.push(state);
@@ -414,8 +412,8 @@ pub mod builder {
             };
 
             match &mut self.state {
-                State::Mod { declarations, .. } => {
-                    declarations.push(declaration);
+                State::Mod { actions, .. } => {
+                    actions.insert(name, declaration);
                     Ok(())
                 }
                 _ => unreachable!(),
@@ -477,7 +475,7 @@ pub mod builder {
             let (parameter, ty) = self.resolve_parameter(parameter_name)?;
 
             let action = match ty {
-                Type::Object(o) => Action::Insert {
+                Type::Object(o) => ActionAtom::Insert {
                     parameter_index: parameter,
                     parameter: parameter_name.into(),
                     ty: o.clone(),
@@ -498,7 +496,7 @@ pub mod builder {
             let (parameter, ty) = self.resolve_parameter(parameter_name)?;
 
             let action = match ty {
-                Type::ObjectRef(o) => Action::Delete {
+                Type::ObjectRef(o) => ActionAtom::Delete {
                     parameter_index: parameter,
                     parameter: parameter_name.into(),
                     ty: o.clone(),
@@ -525,26 +523,11 @@ pub mod builder {
             }
         }
 
-        fn find_struct_mut(&mut self, n: &str) -> Result<&mut Declaration, BuilderError> {
+        fn find_struct_mut(&mut self, n: &str) -> Result<&mut Struct, BuilderError> {
             match self.last_mod_mut() {
-                State::Mod {
-                    struct_names,
-                    declarations,
-                    ..
-                } => {
-                    if !struct_names.contains(n) {
-                        return Err(BuilderError::CanNotResolveName(n.into()));
-                    }
-
-                    for d in declarations.iter_mut() {
-                        match d {
-                            Declaration::Struct { name, .. } if name == n => return Ok(d),
-                            _ => {}
-                        }
-                    }
-
-                    panic!("Broken state.")
-                }
+                State::Mod { structs, .. } => structs
+                    .get_mut(n)
+                    .ok_or_else(|| BuilderError::CanNotResolveName(n.into())),
                 _ => unreachable!(),
             }
         }
@@ -583,8 +566,8 @@ pub mod builder {
 
         pub fn resolve_obj(&self, name: &str, is_ref: bool) -> Result<Type, BuilderError> {
             match self.last_mod() {
-                State::Mod { struct_names, .. } => {
-                    if struct_names.contains(name) {
+                State::Mod { structs, .. } => {
+                    if structs.contains_key(name) {
                         Ok(if is_ref {
                             Type::ObjectRef(name.into())
                         } else {
@@ -598,13 +581,22 @@ pub mod builder {
             }
         }
 
-        pub fn finalize(self) -> Result<Vec<Declaration>, BuilderError> {
+        pub fn finalize(self) -> Result<Mod, BuilderError> {
             if self.frames.len() > 0 {
                 return Err(BuilderError::UnexpectedEnd);
             }
 
             match self.state {
-                State::Mod { declarations, .. } => Ok(declarations),
+                State::Mod {
+                    actions,
+                    structs,
+                    mods,
+                    ..
+                } => Ok(Mod {
+                    actions,
+                    structs,
+                    mods,
+                }),
                 _ => unreachable!(),
             }
         }
