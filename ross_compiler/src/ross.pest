@@ -1,0 +1,69 @@
+WHITESPACE = _{ WHITE_SPACE }
+COMMENT = _{ "/*" ~ (!"*/" ~ ANY)* ~ "*/" }
+
+// Match identifier and keywords.
+identifier_word = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
+keyword = { (
+  // All the keywords from: Rust, Dart, JS, Ross.
+  "Function"     | "abstract"     | "arguments"    | "as"           | "assert"       | "async"        |
+  "await"        | "boolean"      | "break"        | "byte"         | "case"         | "casecatch"    |
+  "catch"        | "char"         | "class"        | "const"        | "continue"     | "covariant"    |
+  "debugger"     | "default"      | "deferred"     | "delete"       | "do"           | "double"       |
+  "dynamic"      | "else"         | "enum"         | "eval"         | "export"       | "extends"      |
+  "extension"    | "external"     | "factory"      | "false"        | "final"        | "finally"      |
+  "float"        | "for"          | "function"     | "get"          | "goto"         | "graph"        |
+  "hide"         | "if"           | "implements"   | "import"       | "in"           | "insert"       |
+  "instanceof"   | "int"          | "interface"    | "is"           | "let"          | "library"      |
+  "long"         | "mixin"        | "mod"          | "native"       | "new"          | "null"         |
+  "on"           | "operator"     | "owned"        | "package"      | "part"         | "private"      |
+  "protected"    | "public"       | "ref"          | "rethrow"      | "return"       | "set"          |
+  "short"        | "show"         | "static"       | "struct"       | "super"        | "switch"       |
+  "sync"         | "synchronized" | "this"         | "throw"        | "throws"       | "transient"    |
+  "true"         | "try"          | "typedef"      | "typeof"       | "var"          | "void"         |
+  "volatile"     | "while"        | "with"         | "yield"
+) ~ !ASCII_ALPHA }
+ident = @{ !keyword ~ identifier_word }
+
+ty = _{ ( ref_type | object_type | primitive_type ) }
+  ref_type = { "ref" ~ object_type }
+  object_type = @{ !(primitive_type ~ !ASCII_ALPHA) ~ ident }
+  primitive_type = {("bool" | "str" | "num" | "hash")}
+
+// Declarations
+mod_declaration = {
+  "mod" ~mod_name ~"{"
+  ~ (declaration)*
+  ~ "}"
+}
+  mod_name = @{ ident }
+
+struct_declaration = {
+  "struct" ~ struct_name ~ ("in" ~ owner_name ~ "as" ~"." ~ owner_field_name)? ~ "{"
+  ~ (struct_field ~( "," ~ struct_field )* ~ ","?)?
+  ~ "}"
+}
+  struct_name = @{ ident }
+  owner_name = @{ ident }
+  owner_field_name = @{ ident }
+  struct_field = _{ struct_field_name ~ ":" ~ struct_field_type }
+    struct_field_name = @{ ident }
+    struct_field_type = { ty }
+
+action_declaration = {
+  "action" ~ action_name ~ "(" ~ (action_parameter ~( "," ~ action_parameter )* ~ ","?)? ~")" ~ "{"
+  ~ (action_statement ~ ";")*
+  ~ "}"
+}
+  action_parameter = _{ parameter_name ~ ":" ~ parameter_type }
+    parameter_name = @{ ident }
+    parameter_type = { ty }
+  action_name = @{ ident }
+
+action_statement = _{ ( insert_action | delete_action ) }
+  insert_action = { "insert" ~ object_name }
+  delete_action = { "delete" ~ object_name }
+  object_name = @{ ident }
+
+declaration = _{ ( mod_declaration | struct_declaration | action_declaration ) }
+
+program = _{ SOI ~ declaration* ~ EOI }
