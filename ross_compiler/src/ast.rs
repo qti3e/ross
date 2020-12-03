@@ -25,12 +25,12 @@ pub struct Action {
 #[derive(Debug)]
 pub enum ActionAtom {
     Insert {
-        parameter_index: u8,
+        parameter_index: usize,
         parameter: String,
         ty: String,
     },
     Delete {
-        parameter_index: u8,
+        parameter_index: usize,
         parameter: String,
         ty: String,
     },
@@ -49,13 +49,12 @@ pub enum Type {
 pub mod builder {
     use super::*;
     use indexmap::IndexMap;
-    use std::collections::HashSet;
     use std::fmt;
 
     pub struct ASTBuilder {
         frames: Vec<State>,
         state: State,
-        path: Vec<u8>,
+        path: Vec<usize>,
     }
 
     #[derive(Debug)]
@@ -68,7 +67,7 @@ pub mod builder {
         FieldNotComplete(String),
         CanNotResolveName(String),
         UnexpectedEnd,
-        IDOutOfBound(Vec<u8>, u8),
+        IDOutOfBound(Vec<usize>, usize),
         InsertTypeError,
         DeleteTypeError,
     }
@@ -200,7 +199,7 @@ pub mod builder {
             // state = self.state
             // self.state = next state
             self.frames.push(next_state);
-            self.path.push(index as u8);
+            self.path.push(index);
 
             Ok(())
         }
@@ -247,8 +246,8 @@ pub mod builder {
                 _ => return Err(BuilderError::OperationOnInvalidState),
             };
 
-            let id = pack_id(&self.path, index as u8)
-                .ok_or_else(|| BuilderError::IDOutOfBound(self.path.clone(), index as u8))?;
+            let id = pack_id(&self.path, index)
+                .ok_or_else(|| BuilderError::IDOutOfBound(self.path.clone(), index))?;
             let mut next_state = State::Struct {
                 name: None,
                 id,
@@ -369,8 +368,8 @@ pub mod builder {
                 _ => return Err(BuilderError::OperationOnInvalidState),
             };
 
-            let id = pack_id(&self.path, index as u8)
-                .ok_or_else(|| BuilderError::IDOutOfBound(self.path.clone(), index as u8))?;
+            let id = pack_id(&self.path, index)
+                .ok_or_else(|| BuilderError::IDOutOfBound(self.path.clone(), index))?;
             let mut next_state = State::Action {
                 name: None,
                 id,
@@ -513,11 +512,11 @@ pub mod builder {
             }
         }
 
-        pub fn resolve_parameter(&self, n: &str) -> Result<(u8, &Type), BuilderError> {
+        pub fn resolve_parameter(&self, n: &str) -> Result<(usize, &Type), BuilderError> {
             match &self.state {
                 State::Action { parameters, .. } => parameters
                     .get_full(n)
-                    .map(|(i, _, t)| (i as u8, t))
+                    .map(|(i, _, t)| (i, t))
                     .ok_or_else(|| BuilderError::CanNotResolveName(n.into())),
                 _ => Err(BuilderError::OperationOnInvalidState),
             }
@@ -603,9 +602,30 @@ pub mod builder {
     }
 
     #[inline]
-    fn pack_id(path: &Vec<u8>, id: u8) -> Option<u32> {
-        println!("Path = {:?}, id = {}", path, id);
-        // TODO(qti3e)
-        Some(0)
+    fn pack_id(path: &Vec<usize>, id: usize) -> Option<u32> {
+        if path.len() > 4 {
+            return None;
+        }
+
+        let mut parts = [0u32; 5];
+        for (i, p) in path.iter().enumerate() {
+            if (p + 1) > 64 {
+                return None;
+            }
+            parts[i] = (p + 1) as u32;
+        }
+        if id > 255 {
+            return None;
+        }
+        parts[4] = id as u32;
+
+        let mut ret = 0u32;
+        ret |= parts[4];
+        ret |= parts[0] << 8;
+        ret |= parts[1] << 14;
+        ret |= parts[2] << 20;
+        ret |= parts[3] << 26;
+
+        Some(ret)
     }
 }
