@@ -609,7 +609,7 @@ pub mod builder {
 
         let mut parts = [0u32; 5];
         for (i, p) in path.iter().enumerate() {
-            if (p + 1) > 64 {
+            if (p + 1) > 63 {
                 return None;
             }
             parts[i] = (p + 1) as u32;
