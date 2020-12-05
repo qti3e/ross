@@ -108,10 +108,10 @@ fn visit_declaration(builder: &mut ASTBuilder, pair: Pair<Rule>) -> Result<(), B
 fn resolve_type(builder: &ASTBuilder, pair: Pair<Rule>) -> Result<ast::Type, BuilderError> {
     match pair.as_rule() {
         Rule::primitive_type => Ok(match pair.as_str() {
-            "bool" => ast::Type::Bool,
-            "str" => ast::Type::Str,
-            "num" => ast::Type::Num,
-            "hash" => ast::Type::Hash,
+            "bool" => ast::Type::Primitive(ast::PrimitiveType::Bool),
+            "str" => ast::Type::Primitive(ast::PrimitiveType::Str),
+            "num" => ast::Type::Primitive(ast::PrimitiveType::Num),
+            "hash" => ast::Type::Primitive(ast::PrimitiveType::Hash),
             _ => unreachable!(),
         }),
         Rule::object_type => builder.resolve_obj(pair.as_str(), false),

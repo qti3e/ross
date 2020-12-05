@@ -2,24 +2,25 @@ use indexmap::IndexMap;
 
 #[derive(Debug)]
 pub struct Mod {
-    structs: IndexMap<String, Struct>,
-    actions: IndexMap<String, Action>,
-    mods: IndexMap<String, Mod>,
+    pub structs: IndexMap<String, Struct>,
+    pub actions: IndexMap<String, Action>,
+    pub mods: IndexMap<String, Mod>,
 }
 
 #[derive(Debug)]
 pub struct Struct {
-    id: u32,
-    owner: Option<(String, String)>,
-    fields: IndexMap<String, Type>,
-    members: IndexMap<String, String>,
+    pub id: u32,
+    pub owner: Option<(String, String)>,
+    pub fields: IndexMap<String, Type>,
+    pub members: IndexMap<String, String>,
+    pub type_vec: Vec<PrimitiveType>,
 }
 
 #[derive(Debug)]
 pub struct Action {
-    id: u32,
-    parameters: IndexMap<String, Type>,
-    actions: Vec<ActionAtom>,
+    pub id: u32,
+    pub parameters: IndexMap<String, Type>,
+    pub actions: Vec<ActionAtom>,
 }
 
 #[derive(Debug)]
@@ -40,6 +41,11 @@ pub enum ActionAtom {
 pub enum Type {
     Object(String),
     ObjectRef(String),
+    Primitive(PrimitiveType),
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum PrimitiveType {
     Bool,
     Str,
     Num,
@@ -266,7 +272,7 @@ pub mod builder {
             let mut state = self.frames.pop().unwrap();
             std::mem::swap(&mut state, &mut self.state);
 
-            let (name, declaration) = match state {
+            let (name, mut declaration) = match state {
                 State::Struct {
                     name,
                     id,
@@ -280,6 +286,7 @@ pub mod builder {
                         id,
                         fields,
                         members: IndexMap::new(),
+                        type_vec: Vec::new(),
                     },
                 ),
                 mut state => {
@@ -291,6 +298,7 @@ pub mod builder {
 
             match &mut self.state {
                 State::Mod { structs, .. } => {
+                    collect_type_vec(&structs, &declaration.fields, &mut declaration.type_vec);
                     structs.insert(name, declaration);
                     Ok(())
                 }
@@ -627,5 +635,35 @@ pub mod builder {
         ret |= parts[3] << 26;
 
         Some(ret)
+    }
+
+    #[inline]
+    fn collect_type_vec(
+        structs: &IndexMap<String, Struct>,
+        fields: &IndexMap<String, Type>,
+        mut type_vec: &mut Vec<PrimitiveType>,
+    ) {
+        fn visit(
+            structs: &IndexMap<String, Struct>,
+            mut vec: &mut Vec<PrimitiveType>,
+            fields: &IndexMap<String, Type>,
+        ) {
+            for (_, ty) in fields {
+                match ty {
+                    Type::Primitive(t) => {
+                        vec.push(*t);
+                    }
+                    Type::ObjectRef(_) => {
+                        vec.push(PrimitiveType::Hash);
+                    }
+                    Type::Object(name) => {
+                        let st = structs.get(name).unwrap();
+                        visit(structs, &mut vec, &st.fields);
+                    }
+                }
+            }
+        }
+
+        visit(structs, &mut type_vec, fields);
     }
 }
