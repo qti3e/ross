@@ -3,6 +3,8 @@
  */
 export type Hash16 = string;
 
+export type PrimitiveValue = boolean | string | number | Hash16;
+
 /**
  * A pointer to an object that is stored on the server.
  */
@@ -37,6 +39,14 @@ export namespace core {
     readonly objects: Record<Hash16, Ref<any>> = Object.create(null);
   }
 
+  export class RawReader {
+    private cursor = 0;
+    constructor(readonly snapshot: Snapshot, readonly data: PrimitiveValue[]) {}
+    next(): PrimitiveValue {
+      return this.data[this.cursor++];
+    }
+  }
+
   export class Session {
     readonly snapshot: Snapshot;
     readonly user: Hash16;
@@ -45,18 +55,30 @@ export namespace core {
 
 // --- functions used in the definition.
 
-export type Field = string | [string, Field[]];
+interface StructConstructor<T = any> {
+  $: Field[];
+  decode(reader: core.RawReader): T;
+  new(): T;
+}
+
+type Field =
+  // Primitive
+  | string
+  // Inline struct
+  | [string, StructConstructor]
+  // Ref<T>
+  | [string];
 
 function flattenPath(fields: Field[]): string[][] {
   const result = [];
 
   function write(path: string[], field: Field) {
-    if (typeof field === "string") {
+    if (typeof field === "string" || field[1] === undefined) {
       result.push([...path, field]);
     } else {
       const newPath = [...path, field[0]];
-      for (let i = 0, n = field[1].length; i < n; ++i)
-        write(newPath, field[1][i]);
+      const fields = field[1].$;
+      for (let i = 0, n = fields.length; i < n; ++i) write(newPath, fields[i]);
     }
   }
 
@@ -70,12 +92,12 @@ function c(
   id: number,
   name: string,
   fields: Field[],
-  members: string[]
+  members: string[] = []
 ) {
   let flattenCache: string[][] | undefined;
   const r = function (...args: any[]) {
     for (let i = 0, n = fields.length; i < n; ++i) {
-      const field = fields[n];
+      const field = fields[i];
       const key = typeof field === "string" ? field : field[0];
       this[key] = args[i];
     }
@@ -91,6 +113,24 @@ function c(
     if (!flattenCache) flattenCache = flattenPath(fields);
     return flattenCache[fieldId];
   };
-  r.name = name;
+  // Static members
+  r.$ = fields;
+  r.decode = function (reader: core.RawReader) {
+    const values = [];
+    for (let i = 0, n = fields.length; i < n; ++i) {
+      const field = fields[i];
+      if (typeof field === 'string') {
+        values.push(reader.next());
+      } else if (field[1] === undefined) {
+        const id = reader.next();
+        if (typeof id !== 'string') throw new TypeError('Expected Hash16.');
+        values.push(reader.snapshot.objects[id]);
+      } else {
+        values.push(field[1].decode(reader));
+      }
+    }
+    return new r(...values);
+  };
+  Object.defineProperty(r, 'name', { value: name });
   ns._[id] = ns[name] = r;
 }

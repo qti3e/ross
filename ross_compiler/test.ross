@@ -3,6 +3,11 @@ struct Point {
     y: num
 }
 
+struct Circle {
+    center: Point,
+    radius: num
+}
+
 action insertPoint(point: Point) {
     insert point;
 }

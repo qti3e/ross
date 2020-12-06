@@ -32,7 +32,6 @@ impl JavaScriptClientBackend {
     pub fn new(indention: &str) -> Self {
         let mut w = Writer::new(indention);
         w.write(CORE_JS);
-        w.write("\n");
         Self {
             w,
             mod_level: 0,
@@ -77,7 +76,8 @@ impl Backend for JavaScriptClientBackend {
 
     fn struct_field(&mut self, name: &String, ty: &ast::Type) {
         match ty {
-            ast::Type::Object(obj) => write!(&mut self.w, "['{n}', $.{o}.$], ", n = name, o = obj),
+            ast::Type::Object(obj) => write!(&mut self.w, "['{n}', $.{o}], ", n = name, o = obj),
+            ast::Type::ObjectRef(_) => write!(&mut self.w, "['{n}'], ", n = name),
             _ => write!(&mut self.w, "'{n}', ", n = name),
         }
         .unwrap();

@@ -83,7 +83,7 @@ impl Cli {
     }
 
     fn write(ast: ast::Mod, sub: &ArgMatches) -> Result<(), String> {
-        let js = gen::client::js::JavaScriptClientBackend::new("  ");
+        let js = gen::client::js::JavaScriptClientBackend::new("    ");
         let source = js.gen(&ast);
         println!("{}", source);
         Ok(())
