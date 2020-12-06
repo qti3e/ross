@@ -1,15 +1,15 @@
-const root = (($, _) => {
-  _ = 'Point';$[_] = gc(_, ['line', 'column', ]);
-  _ = 'Range';$[_] = gc(_, [['from', $.Point.$], ['to', $.Point.$], ]);
+module.exports.root = ($ => {
+  c($, 0, 'Point', ['line', 'column', ]);
+  c($, 1, 'Range', [['from', $.Point.$], ['to', $.Point.$], ]);
   const $$ = $.actions = Object.create(null);
   $.colors = ($ => {
-    _ = 'Color';$[_] = gc(_, ['r', 'g', 'b', ]);
-    _ = 'Space';$[_] = gc(_, ['title', ], ['shapes', ]);
-    _ = 'Shape';$[_] = gc(_, ['owner', ['color', $.Color.$], 'size', ]);
+    c($, 256, 'Color', ['r', 'g', 'b', ]);
+    c($, 257, 'Space', ['title', ], ['shapes', ]);
+    c($, 258, 'Shape', ['owner', ['color', $.Color.$], 'size', ]);
     const $$ = $.actions = Object.create(null);
-    $$.insertShape = (shape) => [].concat(
-      insert(shape),
-    );
+    $$.insertShape = (shape) => p(256, [].concat(
+      i(shape),
+    ));
     $.prototype = null;
     return $;
   })(Object.create($));
