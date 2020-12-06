@@ -9,3 +9,5 @@ pest = "2.1.3"
 pest_derive = "2.1.0"
 indexmap = "1.6.0"
 serde = { version="1.0.117", features=["derive"] }
+serde_yaml = "0.8"
+clap = "2.33.3"

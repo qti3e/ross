@@ -1,0 +1,12 @@
+struct Point {
+    x: num,
+    y: num
+}
+
+action insertPoint(point: Point) {
+    insert point;
+}
+
+action deletePoint(point: ref Point) {
+    delete point;
+}

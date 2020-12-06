@@ -21,6 +21,8 @@ pub use crate::ast;
 pub use crate::gen::{writer::Writer, Backend};
 use std::fmt::Write;
 
+const CORE_JS: &'static str = include_str!("./core/dist/core.js");
+
 pub struct JavaScriptClientBackend {
     w: Writer,
     mod_level: u8,
@@ -28,8 +30,11 @@ pub struct JavaScriptClientBackend {
 
 impl JavaScriptClientBackend {
     pub fn new(indention: &str) -> Self {
+        let mut w = Writer::new(indention);
+        w.write(CORE_JS);
+        w.write("\n");
         Self {
-            w: Writer::new(indention),
+            w,
             mod_level: 0,
         }
     }
@@ -42,7 +47,7 @@ impl Backend for JavaScriptClientBackend {
 
     fn enter_mod(&mut self, name: &String, _: &ast::Mod) {
         if self.mod_level == 0 {
-            write!(&mut self.w, "module.exports.{n} = ($ => {{\n", n = name).unwrap();
+            write!(&mut self.w, "exports.{n} = ($ => {{\n", n = name).unwrap();
             self.w.indent();
             self.w.write("$._ = {};\n"); // Instance ID Map: Map<ID, Constructor>
         } else {
