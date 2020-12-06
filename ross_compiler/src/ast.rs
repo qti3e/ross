@@ -46,6 +46,7 @@ pub enum Type {
 
 #[derive(Debug, Copy, Clone)]
 pub enum PrimitiveType {
+    Null,
     Bool,
     Str,
     Num,
@@ -354,8 +355,14 @@ pub mod builder {
 
         pub fn owner(&mut self, struct_name: &str, field: &str) -> Result<(), BuilderError> {
             let name = match &mut self.state {
-                State::Struct { owner, name, .. } => {
+                State::Struct {
+                    fields,
+                    owner,
+                    name,
+                    ..
+                } => {
                     owner.replace((struct_name.into(), field.into()));
+                    fields.insert("owner".into(), Type::ObjectRef(struct_name.into()));
                     name.clone().unwrap()
                 }
                 _ => return Err(BuilderError::OperationOnInvalidState),
