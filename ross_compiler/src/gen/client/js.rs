@@ -10,10 +10,12 @@
 //! This generator relies on these functions that should be defined in the `core`
 //! - c(ns, id, name, fields, members): This function generates a class for a struct
 //!   and assigns it in the given `namespace` object. (usually $).
-//! - p(id, Patch[]): Create a BatchAction with the given ID and patch list.
+//! - p(id, ...Patch[]): Create a BatchAction with the given ID and patch list.
 //! - i(Struct): Generate the required patches to insert the given struct.
 //! - d(ref): Delete the reference.
 //! - s(ref, field_id, new_value): Generate a CAS action.
+//! - root._ -> is a map from each struct id to the constructor, the assignment
+//!   is donne inn the `c` function and is used for decoding the raw data.
 
 pub use crate::ast;
 pub use crate::gen::{writer::Writer, Backend};
@@ -40,12 +42,13 @@ impl Backend for JavaScriptClientBackend {
 
     fn enter_mod(&mut self, name: &String, _: &ast::Mod) {
         if self.mod_level == 0 {
-            write!(&mut self.w, "module.exports.{n} = ($ => {{\n", n = name)
+            write!(&mut self.w, "module.exports.{n} = ($ => {{\n", n = name).unwrap();
+            self.w.indent();
+            self.w.write("$._ = {};\n"); // Instance ID Map: Map<ID, Constructor>
         } else {
-            write!(&mut self.w, "$.{n} = ($ => {{\n", n = name)
+            write!(&mut self.w, "$.{n} = ($ => {{\n", n = name).unwrap();
+            self.w.indent();
         }
-        .unwrap();
-        self.w.indent();
         self.mod_level += 1;
     }
 
@@ -111,13 +114,13 @@ impl Backend for JavaScriptClientBackend {
     }
 
     fn exit_parameters(&mut self, _: &String, node: &ast::Action) {
-        write!(&mut self.w, ") => p({}, [].concat(\n", node.id).unwrap();
+        write!(&mut self.w, ") => p({},\n", node.id).unwrap();
         self.w.indent();
     }
 
     fn exit_action(&mut self, _name: &String, _node: &ast::Action) {
         self.w.dedent();
-        self.w.write("));\n");
+        self.w.write(");\n");
     }
 
     fn action_atom(&mut self, atom: &ast::ActionAtom) {
