@@ -1,5 +1,6 @@
 // Re-export public stuff.
 export * from "./types";
+export * from './reader';
 export * from "./snapshot";
 
 /** @internal */

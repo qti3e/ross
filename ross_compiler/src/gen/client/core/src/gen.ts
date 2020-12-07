@@ -1,18 +1,5 @@
-import type { RawReader } from "./reader";
-
-interface StructConstructor<T = any> {
-  $: Field[];
-  decode(reader: RawReader): T;
-  new (): T;
-}
-
-type Field =
-  // Primitive
-  | string
-  // Inline struct
-  | [string, StructConstructor]
-  // Ref<T>
-  | [string];
+import type { Field } from './types';
+import type { RawReader } from './reader';
 
 function flattenPath(fields: Field[]): string[][] {
   const result = [];

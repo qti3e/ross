@@ -1,3 +1,5 @@
+import type { RawReader } from "./reader";
+
 /**
  * A 16-byte hash which is stored as a 32-char string in the client.
  */
@@ -28,3 +30,17 @@ export interface Ref<T> {
 export type PrimitiveValue = boolean | string | number | Hash16;
 
 export type ObjectRawData = [number, ...PrimitiveValue[]];
+
+export interface StructConstructor<T = any> {
+  $: Field[];
+  decode(reader: RawReader): T;
+  new (): T;
+}
+
+export type Field =
+  // Primitive
+  | string
+  // Inline struct
+  | [string, StructConstructor]
+  // Ref<T>
+  | [string];

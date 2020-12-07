@@ -32,10 +32,7 @@ impl JavaScriptClientBackend {
     pub fn new(indention: &str) -> Self {
         let mut w = Writer::new(indention);
         w.write(CORE_JS);
-        Self {
-            w,
-            mod_level: 0,
-        }
+        Self { w, mod_level: 0 }
     }
 }
 

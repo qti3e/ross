@@ -15,3 +15,18 @@ action insertPoint(point: Point) {
 action deletePoint(point: ref Point) {
     delete point;
 }
+
+mod colors {
+    struct RGB {
+        r: num,
+        g: num,
+        b: num
+    }
+
+    struct CMYK {
+        c: num,
+        m: num,
+        y: num,
+        k: num,
+    }
+}

@@ -2,6 +2,17 @@
 
 Object.defineProperty(exports, '__esModule', { value: true });
 
+class RawReader {
+    constructor(snapshot, data) {
+        this.snapshot = snapshot;
+        this.data = data;
+        this.cursor = 0;
+    }
+    next() {
+        return this.data[this.cursor++];
+    }
+}
+
 /**
  * X
  */
@@ -44,7 +55,7 @@ function c(ns, id, name, fields, members = []) {
                 this[members[i]] = [];
         }
         getAllChildren() {
-            return Array.prototype.concat.apply([], members.map(m => this[m]));
+            return Array.prototype.concat.apply([], members.map((m) => this[m]));
         }
         getPathFor(fieldId) {
             if (!flattenCache)
@@ -81,6 +92,7 @@ var gen = /*#__PURE__*/Object.freeze({
   c: c
 });
 
+exports.RawReader = RawReader;
 exports.Snapshot = Snapshot;
 exports.__ = gen;
 exports.root = ($ => {
@@ -94,6 +106,13 @@ exports.root = ($ => {
     $$.deletePoint = (point) => p(1,
         d(point),
     );
+    $.colors = ($ => {
+        c($, 256, 'RGB', ['r', 'g', 'b', ]);
+        c($, 257, 'CMYK', ['c', 'm', 'y', 'k', ]);
+        const $$ = $.actions = Object.create(null);
+        $.prototype = null;
+        return $;
+    })(Object.create($));
     return $;
 })(Object.create(null));
 
