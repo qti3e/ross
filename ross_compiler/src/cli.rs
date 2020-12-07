@@ -2,8 +2,9 @@ use crate::ast;
 use crate::gen::{self, Backend};
 use crate::parser;
 use clap::{App, Arg, ArgMatches, SubCommand};
-use std::fs;
+use std::fs::{self, File};
 use std::path::Path;
+use std::io::prelude::*;
 
 pub struct Cli {}
 
@@ -85,9 +86,27 @@ impl Cli {
     }
 
     fn write(ast: ast::Mod, sub: &ArgMatches) -> Result<(), String> {
-        let js = gen::client::tsd::TypeScriptClientBackend::new("    ");
-        let source = js.gen(&ast);
-        println!("{}", source);
+        let dir = sub.value_of("OUTDIR").unwrap().to_string();
+        let path = Path::new(&dir);
+
+        if !path.exists() {
+            std::fs::create_dir_all(path).unwrap();
+        }
+
+        if !path.is_dir() {
+            return Err(format!("'{}' is not a directory.", path.display()));
+        }
+
+        let js_path = path.join("client.js");
+        let tsd_path = path.join("client.d.ts");
+        let mut js_file = File::create(js_path).map_err(|e| format!("{}", e))?;
+        let mut tsd_file = File::create(tsd_path).map_err(|e| format!("{}", e))?;
+
+        let js = gen::client::js::JavaScriptClientBackend::new("    ").gen(&ast);
+        let tsd = gen::client::tsd::TypeScriptClientBackend::new("    ").gen(&ast);
+        js_file.write_all(js.as_bytes()).map_err(|e| format!("{}", e))?;
+        tsd_file.write_all(tsd.as_bytes()).map_err(|e| format!("{}", e))?;
+
         Ok(())
     }
 }
