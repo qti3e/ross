@@ -21,7 +21,7 @@ pub use crate::ast;
 pub use crate::gen::{writer::Writer, Backend};
 use std::fmt::Write;
 
-const CORE_JS: &'static str = include_str!("./core/dist/core.js");
+const CORE_JS: &'static str = include_str!("./core/dist/bundle.js");
 
 pub struct JavaScriptClientBackend {
     w: Writer,
