@@ -8,7 +8,7 @@ export type Hash16 = string;
 /**
  * A pointer to an object that is stored on the server.
  */
-export interface Ref<T> {
+export interface Ref<T extends StructBase> {
   /**
    * Each object that is stored on the server has a unique id which is
    * assigned to it upon insertion.
@@ -29,9 +29,9 @@ export interface Ref<T> {
 
 export type PrimitiveValue = boolean | string | number | Hash16;
 
-export type ObjectRawData = [number, ...PrimitiveValue[]];
+export type ObjectRawData = [tag: number, ...data: PrimitiveValue[]];
 
-export interface StructConstructor<T = any> {
+export interface StructConstructor<T extends StructBase = StructBase> {
   $: Field[];
   decode(reader: RawReader): T;
   new (): T;
@@ -44,3 +44,22 @@ export type Field =
   | [string, StructConstructor]
   // Ref<T>
   | [string];
+
+/**
+ * Common methods on every struct.
+ */
+export interface StructBase {
+  /**
+   * Return the list of all the objects owned by this object.
+   */
+  getAllChildren(): StructBase[];
+  /**
+   * @param fieldId Index of the field when the data is flattened.
+   * @internal
+   */
+  getPathFor(fieldId: number): string[];
+  /**
+   * Encode this object as an array of primitive values.
+   */
+  encode(): ObjectRawData;
+}

@@ -1,7 +1,19 @@
-import type { Field } from './types';
-import type { RawReader } from './reader';
+import type { Field, ObjectRawData, StructBase } from "./types";
+import type { Snapshot } from "./snapshot";
+import { RawReader } from "./reader";
 
-function flattenPath(fields: Field[]): string[][] {
+/**
+ * Get a list of fields and return an array of the path to each field.
+ * # Example
+ * ```js
+ * // struct Point2D {x: num, y: num}
+ * // struct X {pos: Point2D, size: num}
+ * flattenFields([['pos', ['x', 'y']], 'size']);
+ * // -> [['pos', 'x'], ['pos', 'y'], ['size']]
+ * ```
+ * @param fields List of the fields of an struct.
+ */
+function flattenFields(fields: Field[]): string[][] {
   const result = [];
 
   function write(path: string[], field: Field) {
@@ -19,6 +31,14 @@ function flattenPath(fields: Field[]): string[][] {
   return result;
 }
 
+/**
+ * Generate a class to represent an struct from some descriptions.
+ * @param ns The namespace object.
+ * @param id Unique ID of the struct.
+ * @param name Name of the struct.
+ * @param fields List of fields.
+ * @param members Name of object containers of this struct.
+ */
 export function c(
   ns: any,
   id: number,
@@ -27,7 +47,7 @@ export function c(
   members: string[] = []
 ) {
   let flattenCache: string[][] | undefined;
-  class Struct {
+  class Struct implements StructBase {
     static readonly $ = fields;
 
     constructor(...args: any[]) {
@@ -47,11 +67,34 @@ export function c(
     }
 
     getPathFor(fieldId: number): string[] {
-      if (!flattenCache) flattenCache = flattenPath(fields);
+      if (!flattenCache) flattenCache = flattenFields(fields);
       return flattenCache[fieldId];
     }
 
-    static decode(reader: RawReader) {
+    encode(buffer?: ObjectRawData): ObjectRawData {
+      if (!buffer) buffer = [id];
+
+      for (let i = 0, n = fields.length; i < n; ++i) {
+        const field = fields[i];
+        if (typeof field === "string") {
+          buffer.push(this[field]);
+        } else if (field[1] === undefined) {
+          buffer.push(this[field[0]]);
+        } else {
+          this[field[0]].encode(buffer);
+        }
+      }
+
+      return buffer;
+    }
+
+    static decode(reader: RawReader): Struct;
+    static decode(snapshot: Snapshot, data: ObjectRawData): Struct;
+    static decode() {
+      const reader =
+        arguments.length === 1
+          ? arguments[0]
+          : new RawReader(arguments[0], arguments[1]);
       const values = [];
       for (let i = 0, n = fields.length; i < n; ++i) {
         const field = fields[i];

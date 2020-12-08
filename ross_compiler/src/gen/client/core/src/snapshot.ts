@@ -28,9 +28,6 @@ export interface BatchPatch {
   time: number;
 }
 
-/**
- * X
- */
 export class Snapshot {
   /**
    * The latest version of all the objects in the snapshot.
