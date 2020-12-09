@@ -48,18 +48,28 @@ export function c(
   fields: Field[],
   members: string[] = []
 ) {
-  let flattenCache: string[][] | undefined;
   class Struct extends RossStruct {
+    static flattenCache: string[][] | undefined;
     static readonly $ = fields;
 
     constructor(...args: any[]) {
       super();
-      for (let i = 0, n = fields.length; i < n; ++i) {
-        const field = fields[i];
+      let arg = 0;
+      for (let n = fields.length; arg < n; ++arg) {
+        const field = fields[arg];
         const key = typeof field === "string" ? field : field[0];
-        this[key] = args[i];
+        this[key] = args[arg];
       }
-      for (let i = 0, n = members.length; i < n; ++i) this[members[i]] = [];
+      for (let i = 0, n = members.length; i < n; ++i, ++arg) {
+        const children = (this[members[i]] = Array.from(args[arg] || []));
+        for (let i = 0, n = children.length; i < n; ++i) {
+          const child = children[i];
+          if (!(child instanceof RossStruct))
+            throw new Error("Child must be another RossStruct");
+          if (child.owner !== null)
+            throw new Error("Object must not have an active owner.");
+        }
+      }
     }
 
     getAllChildren() {
@@ -70,8 +80,8 @@ export function c(
     }
 
     getPathFor(fieldId: number): string[] {
-      if (!flattenCache) flattenCache = flattenFields(fields);
-      return flattenCache[fieldId];
+      if (!Struct.flattenCache) Struct.flattenCache = flattenFields(fields);
+      return Struct.flattenCache[fieldId];
     }
 
     encode(buffer?: ObjectRawData): ObjectRawData {

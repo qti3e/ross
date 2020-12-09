@@ -65,6 +65,8 @@ export type Field =
  * Common methods on every struct.
  */
 export abstract class RossStruct {
+  /** @internal */
+  owner?: Hash16;
   /**
    * Return the list of all the objects owned by this object.
    * @internal

@@ -54,6 +54,7 @@ impl Backend for TypeScriptClientBackend {
     fn struct_field(&mut self, name: &String, ty: &ast::Type) {
         let ty = match ty {
             ast::Type::Object(obj) => format!("{n}: {o}", n = name, o = obj),
+            ast::Type::ObjectRef(obj) if name == "owner" => format!("{n}: Ref<{o}> | null", n = name, o = obj),
             ast::Type::ObjectRef(obj) => format!("{n}: Ref<{o}>", n = name, o = obj),
             ast::Type::Primitive(p) => match p {
                 ast::PrimitiveType::Null => format!("{n}: null", n = name),
@@ -72,13 +73,21 @@ impl Backend for TypeScriptClientBackend {
     }
 
     fn struct_member(&mut self, field: &String, object: &String) {
-        write!(
-            &mut self.w,
-            "readonly {n}: Ref<{o}>[];\n",
-            n = field,
-            o = object
-        )
-        .unwrap()
+        if self.in_constructor {
+            write!(
+                &mut self.w,
+                "{n}: ArrayLike<{o}> | undefined,\n",
+                n = field,
+                o = object
+            )
+        } else {
+            write!(
+                &mut self.w,
+                "readonly {n}: ReadonlyArray<{o}>;\n",
+                n = field,
+                o = object
+            )
+        }.unwrap()
     }
 
     fn exit_struct(&mut self, _name: &String, node: &ast::Struct) {
@@ -86,6 +95,7 @@ impl Backend for TypeScriptClientBackend {
         self.w.indent();
         self.in_constructor = true;
         self.visit_struct_fields(node);
+        self.visit_struct_members(node);
         self.w.dedent();
         self.w.write(");\n");
 

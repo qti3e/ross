@@ -35,10 +35,9 @@ export class Snapshot {
   readonly objects: Record<Hash16, Ref<any>> = Object.create(null);
 
   /**
-   * 
+   * Perform an atomic set of patches.
    * @param batch The list of patches to apply.
    * @internal
    */
-  perform(batch: Patch[]) {
-  }
+  perform(batch: Patch[]) {}
 }
