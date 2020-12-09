@@ -66,7 +66,18 @@ export type Field =
  */
 export abstract class RossStruct {
   /** @internal */
-  owner?: Hash16;
+  owner?: Ref<RossStruct> | null;
+  /**
+   * Life-time event, called when the object is inserted.
+   * @param ref Reference to this object.
+   * @internal
+   */
+  abstract attach(ref: Ref<RossStruct>): void;
+  /**
+   * Life-time event, called when the object is deleted.
+   * @internal
+   */
+  abstract detach(): void;
   /**
    * Return the list of all the objects owned by this object.
    * @internal

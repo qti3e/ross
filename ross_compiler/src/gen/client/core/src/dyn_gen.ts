@@ -1,5 +1,11 @@
 import type { Snapshot } from "./snapshot";
-import { Field, ObjectRawData, RossStruct, PrimitiveValue } from "./common";
+import {
+  Field,
+  ObjectRawData,
+  RossStruct,
+  PrimitiveValue,
+  Ref,
+} from "./common";
 
 // This file contains the functions used to generate the classes and other
 // stuff dynamically at the runtime.
@@ -46,7 +52,8 @@ export function c(
   id: number,
   name: string,
   fields: Field[],
-  members: string[] = []
+  members: string[],
+  ownerField?: string
 ) {
   class Struct extends RossStruct {
     static flattenCache: string[][] | undefined;
@@ -68,6 +75,36 @@ export function c(
             throw new Error("Child must be another RossStruct");
           if (child.owner !== null)
             throw new Error("Object must not have an active owner.");
+        }
+      }
+    }
+
+    attach(ref: Ref<Struct>) {
+      for (let i = 0, n = members.length; i < n; ++i) {
+        const children = this[members[i]] as RossStruct[];
+        for (let j = 0, n = children.length; j < n; ++j) {
+          children[j].owner = ref;
+        }
+      }
+      // If the object is owned insert it to the owner.
+      if (ownerField && this.owner) {
+        const ownerMembers = this.owner[ownerField] as RossStruct[];
+        ownerMembers.push(this);
+      }
+    }
+
+    detach() {
+      for (let i = 0, n = members.length; i < n; ++i) {
+        const children = this[members[i]] as RossStruct[];
+        for (let j = 0, n = children.length; j < n; ++j) {
+          children[j].owner = null;
+        }
+      }
+      if (ownerField && this.owner) {
+        const ownerMembers = this.owner[ownerField] as RossStruct[];
+        const i = ownerMembers.indexOf(this);
+        if (i >= 0) {
+          ownerMembers.splice(i, 1);
         }
       }
     }
@@ -121,4 +158,12 @@ export function c(
 
   Object.defineProperty(Struct, "name", { value: name });
   ns._[id] = ns[name] = Struct;
+}
+
+/**
+ * Create an insert patch.
+ * @param obj The object to insert.
+ */
+export function i(obj: RossStruct) {
+  const children = obj.getAllChildren();
 }

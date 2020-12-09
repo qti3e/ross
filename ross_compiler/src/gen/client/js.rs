@@ -80,12 +80,8 @@ impl Backend for JavaScriptClientBackend {
         .unwrap();
     }
 
-    fn exit_fields(&mut self, node: &ast::Struct) {
-        if node.members.len() > 0 {
-            self.w.write("], [")
-        } else {
-            self.w.write("]);\n")
-        }
+    fn exit_fields(&mut self, _node: &ast::Struct) {
+        self.w.write("], [")
     }
 
     fn struct_member(&mut self, field: &String, _object: &String) {
@@ -93,7 +89,9 @@ impl Backend for JavaScriptClientBackend {
     }
 
     fn exit_struct(&mut self, _name: &String, node: &ast::Struct) {
-        if node.members.len() > 0 {
+        if let Some((_, field)) = &node.owner {
+            write!(&mut self.w, "], '{n}');\n", n = field).unwrap()
+        } else {
             self.w.write("]);\n");
         }
     }

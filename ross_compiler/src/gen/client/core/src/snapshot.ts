@@ -1,5 +1,10 @@
 import { Hash16, ObjectRawData, PrimitiveValue, Ref } from "./common";
 
+export interface TouchPatch {
+  type: "touch";
+  id: Hash16;
+}
+
 export interface CreatePatch {
   type: "create";
   id: Hash16;
@@ -19,7 +24,7 @@ export interface CASPatch {
   target: PrimitiveValue;
 }
 
-export type Patch = CreatePatch | DeletePatch | CASPatch;
+export type Patch = TouchPatch | CreatePatch | DeletePatch | CASPatch;
 
 export interface BatchPatch {
   patches: Patch[];
