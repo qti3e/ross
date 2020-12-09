@@ -1,0 +1,9 @@
+struct Point2D {
+    x: num,
+    y: num
+}
+
+struct Circle {
+    center: Point2D,
+    radius: num
+}

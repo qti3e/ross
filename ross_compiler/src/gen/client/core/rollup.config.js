@@ -2,7 +2,7 @@ import ts from "@wessberg/rollup-plugin-ts";
 
 const config = [
   {
-    input: "./src/main.ts",
+    input: "./src/lib.ts",
     output: [{ file: "dist/bundle.js", format: "commonjs" }],
     plugins: [ts({})]
   }

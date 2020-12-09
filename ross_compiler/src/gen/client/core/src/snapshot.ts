@@ -1,4 +1,4 @@
-import { Hash16, ObjectRawData, PrimitiveValue, Ref } from "./types";
+import { Hash16, ObjectRawData, PrimitiveValue, Ref } from "./common";
 
 export interface CreatePatch {
   type: "create";

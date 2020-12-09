@@ -1,6 +1,8 @@
-import type { Field, ObjectRawData, StructBase } from "./types";
 import type { Snapshot } from "./snapshot";
-import { RawReader } from "./reader";
+import { Field, ObjectRawData, RossStruct, PrimitiveValue } from "./common";
+
+// This file contains the functions used to generate the classes and other
+// stuff dynamically at the runtime.
 
 /**
  * Get a list of fields and return an array of the path to each field.
@@ -47,10 +49,11 @@ export function c(
   members: string[] = []
 ) {
   let flattenCache: string[][] | undefined;
-  class Struct implements StructBase {
+  class Struct extends RossStruct {
     static readonly $ = fields;
 
     constructor(...args: any[]) {
+      super();
       for (let i = 0, n = fields.length; i < n; ++i) {
         const field = fields[i];
         const key = typeof field === "string" ? field : field[0];
@@ -88,24 +91,18 @@ export function c(
       return buffer;
     }
 
-    static decode(reader: RawReader): Struct;
-    static decode(snapshot: Snapshot, data: ObjectRawData): Struct;
-    static decode() {
-      const reader =
-        arguments.length === 1
-          ? arguments[0]
-          : new RawReader(arguments[0], arguments[1]);
+    static decode(snapshot: Snapshot, iter: Iterator<PrimitiveValue>): Struct {
       const values = [];
       for (let i = 0, n = fields.length; i < n; ++i) {
         const field = fields[i];
         if (typeof field === "string") {
-          values.push(reader.next());
+          values.push(iter.next().value);
         } else if (field[1] === undefined) {
-          const id = reader.next();
+          const id = iter.next().value;
           if (typeof id !== "string") throw new TypeError("Expected Hash16.");
-          values.push(reader.snapshot.objects[id]);
+          values.push(snapshot.objects[id]);
         } else {
-          values.push(field[1].decode(reader));
+          values.push(field[1].decode(snapshot, iter));
         }
       }
       return new Struct(...values);

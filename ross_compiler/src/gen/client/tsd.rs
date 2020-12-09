@@ -31,7 +31,7 @@ impl Backend for TypeScriptClientBackend {
         if self.mod_level == 0 {
             write!(&mut self.w, "export declare namespace {n} {{\n", n = name).unwrap();
             self.w.indent();
-            self.w.write("export const _: Record<number, any>;\n"); // Instance ID Map: Map<ID, Constructor>
+            self.w.write("export const _: Record<number, StructConstructor>;\n"); // Instance ID Map: Map<ID, Constructor>
         } else {
             write!(&mut self.w, "export namespace {n} {{\n", n = name).unwrap();
             self.w.indent();
@@ -47,8 +47,11 @@ impl Backend for TypeScriptClientBackend {
 
     fn enter_struct(&mut self, name: &String, _node: &ast::Struct) {
         self.in_constructor = false;
-        write!(&mut self.w, "export class {n} {{\n", n = name).unwrap();
+        write!(&mut self.w, "export class {n} extends RossStruct {{\n", n = name).unwrap();
         self.w.indent();
+        self.w.write("getAllChildren(): RossStruct[];\n");
+        self.w.write("getPathFor(fieldId: number): string[];\n");
+        self.w.write("encode(): ObjectRawData;\n");
         self.w.write("static readonly $: Field[];\n")
     }
 

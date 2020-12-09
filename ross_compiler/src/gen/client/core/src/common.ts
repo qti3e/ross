@@ -1,4 +1,4 @@
-import type { RawReader } from "./reader";
+import type { Snapshot } from "./snapshot";
 
 /**
  * A 16-byte hash which is stored as a 32-char string in the client.
@@ -8,7 +8,7 @@ export type Hash16 = string;
 /**
  * A pointer to an object that is stored on the server.
  */
-export interface Ref<T extends StructBase> {
+export interface Ref<T extends RossStruct> {
   /**
    * Each object that is stored on the server has a unique id which is
    * assigned to it upon insertion.
@@ -27,13 +27,27 @@ export interface Ref<T extends StructBase> {
   readonly data: T;
 }
 
+/**
+ * Any primitive value in ROSS.
+ */
 export type PrimitiveValue = boolean | string | number | Hash16;
 
+/**
+ * In ROSS (core), fields do not actually exists and all of the objects are
+ * treated the same way, every object is stored as a vector of primitive values,
+ * in other terms all of the labels are dropped upon sending to the server.
+ * It is the job of Ross-Compiler to flatten each object and provide a way for
+ * us to encode and decode each data-vector into/from an object instance.
+ * The way we do this is to assign a unique id to each object (relative to its
+ * position in the schema), and store each object as tagged vector, where the
+ * tag is a numeric value which is the object-id and the reset of the vector
+ * is just all of the object's data inlined.
+ */
 export type ObjectRawData = [tag: number, ...data: PrimitiveValue[]];
 
-export interface StructConstructor<T extends StructBase = StructBase> {
+export interface StructConstructor<T extends RossStruct = RossStruct> {
   $: Field[];
-  decode(reader: RawReader): T;
+  decode(snapshot: Snapshot, iterator: Iterator<PrimitiveValue>): T;
   new (): T;
 }
 
@@ -48,18 +62,18 @@ export type Field =
 /**
  * Common methods on every struct.
  */
-export interface StructBase {
+export abstract class RossStruct {
   /**
    * Return the list of all the objects owned by this object.
    */
-  getAllChildren(): StructBase[];
+  abstract getAllChildren(): RossStruct[];
   /**
    * @param fieldId Index of the field when the data is flattened.
    * @internal
    */
-  getPathFor(fieldId: number): string[];
+  abstract getPathFor(fieldId: number): string[];
   /**
    * Encode this object as an array of primitive values.
    */
-  encode(): ObjectRawData;
+  abstract encode(): ObjectRawData;
 }

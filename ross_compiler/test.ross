@@ -1,7 +1,0 @@
-struct Scene {
-    title: str
-}
-
-struct Object in Scene as .objects {
-    path: str
-}

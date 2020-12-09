@@ -1,0 +1,12 @@
+{
+  "name": "suite",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "devDependencies": {
+    "ava": "^3.14.0"
+  },
+  "scripts": {
+		"test": "ava"
+	}
+}
