@@ -33,4 +33,12 @@ export class Snapshot {
    * The latest version of all the objects in the snapshot.
    */
   readonly objects: Record<Hash16, Ref<any>> = Object.create(null);
+
+  /**
+   * 
+   * @param batch The list of patches to apply.
+   * @internal
+   */
+  perform(batch: Patch[]) {
+  }
 }

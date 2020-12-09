@@ -46,7 +46,9 @@ export type PrimitiveValue = boolean | string | number | Hash16;
 export type ObjectRawData = [tag: number, ...data: PrimitiveValue[]];
 
 export interface StructConstructor<T extends RossStruct = RossStruct> {
+  /* @internal */
   $: Field[];
+  /* @internal */
   decode(snapshot: Snapshot, iterator: Iterator<PrimitiveValue>): T;
   new (): T;
 }
@@ -65,6 +67,7 @@ export type Field =
 export abstract class RossStruct {
   /**
    * Return the list of all the objects owned by this object.
+   * @internal
    */
   abstract getAllChildren(): RossStruct[];
   /**
@@ -74,6 +77,7 @@ export abstract class RossStruct {
   abstract getPathFor(fieldId: number): string[];
   /**
    * Encode this object as an array of primitive values.
+   * @internal
    */
   abstract encode(): ObjectRawData;
 }
