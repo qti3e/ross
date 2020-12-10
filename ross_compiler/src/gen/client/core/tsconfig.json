@@ -4,7 +4,8 @@
         "module": "CommonJS",
         "declaration": true,
         "outDir": "dist",
-        "stripInternal": true
+        "stripInternal": true,
+        "lib": ["ES2017", "DOM"]
     },
     "include": ["src/**/*.ts"]
 }

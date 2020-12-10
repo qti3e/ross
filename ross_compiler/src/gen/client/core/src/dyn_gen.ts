@@ -1,10 +1,11 @@
-import type { Snapshot } from "./snapshot";
+import type { Snapshot, Patch } from "./snapshot";
 import {
   Field,
   ObjectRawData,
   RossStruct,
   PrimitiveValue,
   Ref,
+  Hash16,
 } from "./common";
 
 // This file contains the functions used to generate the classes and other
@@ -58,9 +59,12 @@ export function c(
   class Struct extends RossStruct {
     static flattenCache: string[][] | undefined;
     static readonly $ = fields;
+    private _alreadyInOwner: boolean;
 
     constructor(...args: any[]) {
       super();
+      if (ownerField && args[0] === null) this._alreadyInOwner = true;
+
       let arg = 0;
       for (let n = fields.length; arg < n; ++arg) {
         const field = fields[arg];
@@ -87,7 +91,7 @@ export function c(
         }
       }
       // If the object is owned insert it to the owner.
-      if (ownerField && this.owner) {
+      if (ownerField && this.owner && !this._alreadyInOwner) {
         const ownerMembers = this.owner[ownerField] as RossStruct[];
         ownerMembers.push(this);
       }
@@ -121,7 +125,7 @@ export function c(
       return Struct.flattenCache[fieldId];
     }
 
-    encode(buffer?: ObjectRawData): ObjectRawData {
+    encode(ownerId?: Hash16, buffer?: ObjectRawData): ObjectRawData {
       if (!buffer) buffer = [id];
 
       for (let i = 0, n = fields.length; i < n; ++i) {
@@ -129,9 +133,13 @@ export function c(
         if (typeof field === "string") {
           buffer.push(this[field]);
         } else if (field[1] === undefined) {
-          buffer.push(this[field[0]]);
+          if (ownerId && i === 0) {
+            buffer.push(ownerId);
+          } else {
+            buffer.push(this[field[0]].id);
+          }
         } else {
-          this[field[0]].encode(buffer);
+          this[field[0]].encode(undefined, buffer);
         }
       }
 
@@ -164,6 +172,39 @@ export function c(
  * Create an insert patch.
  * @param obj The object to insert.
  */
-export function i(obj: RossStruct) {
-  const children = obj.getAllChildren();
+export function i(obj: RossStruct): (uuidFn: () => string) => Patch[] {
+  const create = (
+    uuidFn: () => string,
+    patches: Patch[],
+    obj: RossStruct,
+    ownerId?: Hash16
+  ) => {
+    const id = uuidFn();
+
+    patches.push({
+      id,
+      type: "create",
+      data: obj.encode(ownerId),
+    });
+
+    if (obj.owner) {
+      patches.push({
+        type: "touch",
+        id: obj.owner.id,
+      });
+    }
+
+    const children = obj.getAllChildren();
+    for (let i = 0, n = children.length; i < n; ++i)
+      create(uuidFn, patches, children[i], id);
+  };
+
+  let called = false;
+  return (uuidFn: () => string) => {
+    if (called) throw new Error("This function should only get called once.");
+    called = true;
+    const patches: Patch[] = [];
+    create(uuidFn, patches, obj);
+    return patches;
+  };
 }

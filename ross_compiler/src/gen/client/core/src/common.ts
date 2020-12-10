@@ -90,7 +90,9 @@ export abstract class RossStruct {
   abstract getPathFor(fieldId: number): string[];
   /**
    * Encode this object as an array of primitive values.
+   * @param ownerId Provided to contained objects that their owner is not
+   * inserted yet and hence do not have a reference to it.
    * @internal
    */
-  abstract encode(): ObjectRawData;
+  abstract encode(ownerId?: Hash16): ObjectRawData;
 }
