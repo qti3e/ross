@@ -68,6 +68,10 @@ export abstract class RossStruct {
   /** @internal */
   owner?: Ref<RossStruct> | null;
   /**
+   * Reference to self.
+   */
+  readonly _ref?: Ref<RossStruct>;
+  /**
    * Life-time event, called when the object is inserted.
    * @param ref Reference to this object.
    * @internal

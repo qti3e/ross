@@ -63,7 +63,11 @@ export function c(
 
     constructor(...args: any[]) {
       super();
-      if (ownerField && args[0] === null) this._alreadyInOwner = true;
+      if (ownerField && args[0] === null)
+        Object.defineProperty(this, '_alreadyInOwner', {
+          configurable: true,
+          value: true
+        });
 
       let arg = 0;
       for (let n = fields.length; arg < n; ++arg) {
@@ -84,6 +88,10 @@ export function c(
     }
 
     attach(ref: Ref<Struct>) {
+      Object.defineProperty(this, '_ref', {
+        configurable: true,
+        value: ref
+      });
       for (let i = 0, n = members.length; i < n; ++i) {
         const children = this[members[i]] as RossStruct[];
         for (let j = 0, n = children.length; j < n; ++j) {
@@ -98,6 +106,11 @@ export function c(
     }
 
     detach() {
+      Object.defineProperty(this, '_ref', {
+        configurable: true,
+        writable: false,
+        value: undefined
+      });
       for (let i = 0, n = members.length; i < n; ++i) {
         const children = this[members[i]] as RossStruct[];
         for (let j = 0, n = children.length; j < n; ++j) {
@@ -207,4 +220,36 @@ export function i(obj: RossStruct): (uuidFn: () => string) => Patch[] {
     create(uuidFn, patches, obj);
     return patches;
   };
+}
+
+/**
+ * Create the list of patches required in order to delete an object.
+ * @param ref Reference to the object that should be deleted.
+ */
+export function d(ref: Ref<RossStruct>): Patch[] {
+  const patches: Patch[] = [];
+  const q: Ref<RossStruct>[] = [ref];
+
+  const owner = ref.data.owner;
+  if (owner) {
+    patches.push({
+      type: "touch",
+      id: ref.id,
+    });
+  }
+
+  for (let i = 0; i < q.length; ++i) {
+    const ref = q[i];
+
+    patches.push({
+      type: "delete",
+      id: ref.id,
+      version: ref.version,
+    });
+
+    const children = ref.data.getAllChildren();
+    for (let j = 0, n = children.length; j < n; ++j) q.push(children[j]._ref);
+  }
+
+  return patches;
 }
