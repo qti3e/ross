@@ -7,7 +7,7 @@ pub(crate) use crate::error::*;
 pub use crate::types::*;
 
 pub type UserId = Hash16;
-pub type ActionKind = i16;
+pub type ActionKind = u32;
 
 pub use crate::context::*;
 pub use crate::editor::*;
