@@ -1,9 +1,7 @@
-use super::{
-    direction, Delta, DeltaBuilder, DeltaEntry, Patch, PatchAtom, PatchConflict, PrimitiveValue,
-};
+use super::{Delta, DeltaEntry, Patch, PatchAtom, PatchConflict, PrimitiveValue};
 use crate::utils::hash::Hash16;
 use serde::{Deserialize, Serialize};
-use std::collections::{hash_map::Entry, HashMap};
+use std::collections::{hash_map::Entry, BTreeMap, HashMap};
 
 /// ID of an object.
 pub type ObjectId = Hash16;
@@ -45,13 +43,7 @@ impl State {
                     self.objects.remove(&id);
                 }
                 DeltaEntry::Inserted { data, version } => {
-                    self.objects.insert(
-                        id,
-                        Object {
-                            version: version.unwrap_or(0),
-                            data,
-                        },
-                    );
+                    self.objects.insert(id, Object { version, data });
                 }
                 DeltaEntry::Updated { version, changes } => {
                     let obj = self.objects.get_mut(&id).unwrap();
@@ -83,8 +75,7 @@ impl State {
     /// On failure this method will return the list of `Conflict`s that prevented this
     /// patch to be applied.
     pub fn perform(&mut self, patch: &Patch) -> Result<Delta, Vec<PatchConflict>> {
-        let mut revert_builder =
-            DeltaBuilder::<direction::Backward>::with_capacity(patch.actions.len() / 2);
+        let mut revert_builder = RevertDeltaBuilder::with_capacity(patch.actions.len() / 2);
         let mut perform = true; // basically `conflicts.len() == 0`.
         let mut conflicts = Vec::new();
 
@@ -93,8 +84,9 @@ impl State {
                 PatchAtom::Touch { oid } => {
                     match self.objects.get_mut(oid) {
                         Some(obj) if perform => {
-                            revert_builder.touch(*oid);
-                            obj.version += 1;
+                            if revert_builder.touch(*oid) {
+                                obj.version += 1;
+                            }
                         }
                         Some(_) => {}
                         None => {
@@ -112,11 +104,15 @@ impl State {
                             conflicts.push(PatchConflict::IdConflict { oid: *oid });
                         }
                         Entry::Vacant(entry) => {
-                            revert_builder.delete(*oid);
-                            entry.insert(Object {
-                                version: version.unwrap_or(0),
-                                data: data.clone(),
-                            });
+                            if let Some(obj) = revert_builder.delete(*oid) {
+                                // don't trust the user in this case.
+                                entry.insert(obj);
+                            } else {
+                                entry.insert(Object {
+                                    version: version.unwrap_or(0),
+                                    data: data.clone(),
+                                });
+                            }
                         }
                     }
                 }
@@ -146,9 +142,10 @@ impl State {
                                 v if v == target => { /* Already there */ }
                                 v if v == current => {
                                     if perform {
-                                        obj.version += 1;
                                         let prev = set_field(&mut obj.data, *field, target.clone());
-                                        revert_builder.set(*oid, *field, prev);
+                                        if revert_builder.set(*oid, *field, prev) {
+                                            obj.version += 1;
+                                        }
                                     }
                                 }
                                 _ => {
@@ -181,7 +178,7 @@ impl State {
 }
 
 #[inline]
-pub(super) fn set_field(
+fn set_field(
     data: &mut Vec<PrimitiveValue>,
     field: u8,
     mut value: PrimitiveValue,
@@ -207,4 +204,135 @@ fn get_field(data: &Vec<PrimitiveValue>, field: u8) -> &PrimitiveValue {
         return &data[field];
     }
     &PrimitiveValue::Null
+}
+
+/// Used in `perform()` to build the delta used to inverse the patch.
+struct RevertDeltaBuilder(Delta);
+
+impl RevertDeltaBuilder {
+    #[inline]
+    pub fn with_capacity(capacity: usize) -> Self {
+        RevertDeltaBuilder(Delta::with_capacity(capacity))
+    }
+
+    #[inline]
+    pub fn build(self) -> Delta {
+        self.0
+    }
+
+    /// Returns `false` if the object was inserted in this patch, so that we wouldn't
+    /// increase the version.
+    #[inline]
+    pub fn touch(&mut self, oid: ObjectId) -> bool {
+        match self.0.entry(oid) {
+            Entry::Occupied(mut entry) => match entry.get_mut() {
+                DeltaEntry::Deleted => {
+                    return false;
+                }
+                // The object was removed from the state in the patch, so even if it's
+                // touched, a conflict is reported before this function is called, so
+                // therefore this branch is unreachable.
+                DeltaEntry::Inserted { .. } => unreachable!(),
+                DeltaEntry::Updated { version, .. } => {
+                    *version -= 1;
+                }
+            },
+            Entry::Vacant(entry) => {
+                entry.insert(DeltaEntry::Updated {
+                    version: -1,
+                    changes: BTreeMap::new(),
+                });
+            }
+        }
+        true
+    }
+
+    /// Set the object's status to `deleted`, if the object was deleted in this same
+    /// patch the result is returned.  
+    /// It is used to protect the server against `Delete-Insert` attack. Imagine the
+    /// following patch is sent by a user, the user can insert any arbitrary data data
+    /// after the `Delete` or even reset the version (which will break the synchronization
+    /// service.), In this special case we don't trust the user with the data (`Data`) and
+    /// will rely on the data returned by this function.
+    /// ```txt
+    ///   Delete(ID)
+    ///   Insert(ID, Data)
+    /// ```
+    #[inline]
+    pub fn delete(&mut self, oid: ObjectId) -> Option<Object> {
+        match self.0.entry(oid) {
+            Entry::Occupied(mut entry) => match entry.get() {
+                DeltaEntry::Deleted => unreachable!(),
+                DeltaEntry::Inserted { .. } => {
+                    if let DeltaEntry::Inserted { version, data } = entry.remove() {
+                        return Some(Object { data, version });
+                    }
+                }
+                DeltaEntry::Updated { .. } => {
+                    entry.insert(DeltaEntry::Deleted);
+                }
+            },
+            Entry::Vacant(entry) => {
+                entry.insert(DeltaEntry::Deleted);
+            }
+        }
+        None
+    }
+
+    #[inline]
+    pub fn insert(&mut self, oid: ObjectId, obj: Object) {
+        match self.0.entry(oid) {
+            Entry::Occupied(mut entry) => match entry.get() {
+                DeltaEntry::Deleted => {
+                    // Cancel-out.
+                    entry.remove();
+                }
+                // If the DeltaEntry is Inserted, that means the object is already
+                // deleted in the patch, which basically means this function never
+                // gets called.
+                DeltaEntry::Inserted { .. } => unreachable!(),
+                DeltaEntry::Updated { .. } => {
+                    entry.insert(DeltaEntry::Inserted {
+                        data: obj.data,
+                        version: obj.version,
+                    });
+                }
+            },
+            Entry::Vacant(entry) => {
+                entry.insert(DeltaEntry::Inserted {
+                    data: obj.data,
+                    version: obj.version,
+                });
+            }
+        }
+    }
+
+    /// Returns `false` if the object was inserted in this patch, so that we wouldn't
+    /// increase the version.
+    #[inline]
+    pub fn set(&mut self, oid: ObjectId, field: FieldIndex, value: PrimitiveValue) -> bool {
+        match self.0.entry(oid) {
+            Entry::Occupied(mut entry) => match entry.get_mut() {
+                DeltaEntry::Deleted => {
+                    return false;
+                }
+                DeltaEntry::Inserted { .. } => unreachable!(),
+                DeltaEntry::Updated { version, changes } => {
+                    *version -= 1;
+                    changes.insert(field, value);
+                }
+            },
+            Entry::Vacant(entry) => {
+                entry.insert(DeltaEntry::Updated {
+                    version: -1,
+                    changes: {
+                        let mut map = BTreeMap::new();
+                        map.insert(field, value);
+                        map
+                    },
+                });
+            }
+        }
+        true
+    }
 }
