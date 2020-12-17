@@ -4,15 +4,32 @@ use std::fmt;
 use std::fmt::Formatter;
 use std::marker::PhantomData;
 
-#[derive(Debug, PartialEq, PartialOrd)]
+#[derive(Debug, Clone)]
 pub enum PrimitiveValue {
     Null,
     True,
     False,
-    // TODO(qti3e) Add U32.
-    Number(f64),
+    U32(u32),
+    Float(f64),
     Hash16(Hash16),
     String(String),
+}
+
+impl PartialEq<PrimitiveValue> for PrimitiveValue {
+    fn eq(&self, other: &PrimitiveValue) -> bool {
+        match (self, other) {
+            (PrimitiveValue::Null, PrimitiveValue::Null) => true,
+            (PrimitiveValue::True, PrimitiveValue::True) => true,
+            (PrimitiveValue::False, PrimitiveValue::False) => true,
+            (PrimitiveValue::U32(a), PrimitiveValue::U32(b)) => a == b,
+            (PrimitiveValue::Float(a), PrimitiveValue::Float(b)) => a == b,
+            (PrimitiveValue::Hash16(a), PrimitiveValue::Hash16(b)) => a == b,
+            (PrimitiveValue::String(a), PrimitiveValue::String(b)) => a == b,
+            (PrimitiveValue::U32(a), PrimitiveValue::Float(b)) => (*a as f64) == *b,
+            (PrimitiveValue::Float(a), PrimitiveValue::U32(b)) => *a == (*b as f64),
+            _ => false,
+        }
+    }
 }
 
 impl Eq for PrimitiveValue {}
@@ -28,11 +45,18 @@ impl From<bool> for PrimitiveValue {
     }
 }
 
+impl From<u32> for PrimitiveValue {
+    #[inline]
+    fn from(value: u32) -> Self {
+        PrimitiveValue::U32(value)
+    }
+}
+
 impl From<f64> for PrimitiveValue {
     #[inline]
     fn from(value: f64) -> Self {
         if value.is_finite() {
-            PrimitiveValue::Number(value)
+            PrimitiveValue::Float(value)
         } else {
             PrimitiveValue::Null
         }
@@ -43,6 +67,13 @@ impl From<String> for PrimitiveValue {
     #[inline]
     fn from(value: String) -> Self {
         PrimitiveValue::String(value)
+    }
+}
+
+impl From<Hash16> for PrimitiveValue {
+    #[inline]
+    fn from(value: Hash16) -> Self {
+        PrimitiveValue::Hash16(value)
     }
 }
 
@@ -67,7 +98,8 @@ impl Serialize for PrimitiveValue {
                 PrimitiveValue::Null => serializer.serialize_none(),
                 PrimitiveValue::True => serializer.serialize_bool(true),
                 PrimitiveValue::False => serializer.serialize_bool(false),
-                PrimitiveValue::Number(n) => serializer.serialize_f64(*n),
+                PrimitiveValue::U32(n) => serializer.serialize_u32(*n),
+                PrimitiveValue::Float(n) => serializer.serialize_f64(*n),
                 PrimitiveValue::Hash16(h) => h.serialize(serializer),
                 PrimitiveValue::String(s) => serializer.serialize_str(&s),
             }
@@ -82,14 +114,17 @@ impl Serialize for PrimitiveValue {
                 PrimitiveValue::False => {
                     serializer.serialize_unit_variant("PrimitiveValue", 2, "False")
                 }
-                PrimitiveValue::Number(value) => {
-                    serializer.serialize_newtype_variant("PrimitiveValue", 3, "Number", value)
+                PrimitiveValue::U32(value) => {
+                    serializer.serialize_newtype_variant("PrimitiveValue", 3, "U32", value)
+                }
+                PrimitiveValue::Float(value) => {
+                    serializer.serialize_newtype_variant("PrimitiveValue", 4, "Float", value)
                 }
                 PrimitiveValue::Hash16(value) => {
-                    serializer.serialize_newtype_variant("PrimitiveValue", 4, "Hash16", value)
+                    serializer.serialize_newtype_variant("PrimitiveValue", 5, "Hash16", value)
                 }
                 PrimitiveValue::String(value) => {
-                    serializer.serialize_newtype_variant("PrimitiveValue", 5, "String", value)
+                    serializer.serialize_newtype_variant("PrimitiveValue", 6, "String", value)
                 }
             }
         }
@@ -111,10 +146,19 @@ impl<'de> Deserialize<'de> for PrimitiveValue {
                 };
 
             if let Ok(ok) = Result::map(
+                <u32 as Deserialize>::deserialize(serde::private::de::ContentRefDeserializer::<
+                    D::Error,
+                >::new(&content)),
+                PrimitiveValue::U32,
+            ) {
+                return Ok(ok);
+            }
+
+            if let Ok(ok) = Result::map(
                 <f64 as Deserialize>::deserialize(serde::private::de::ContentRefDeserializer::<
                     D::Error,
                 >::new(&content)),
-                PrimitiveValue::Number,
+                PrimitiveValue::Float,
             ) {
                 return Ok(ok);
             }
@@ -165,6 +209,7 @@ impl<'de> Deserialize<'de> for PrimitiveValue {
                 field3,
                 field4,
                 field5,
+                field6,
             }
 
             struct FieldVisitor;
@@ -184,9 +229,10 @@ impl<'de> Deserialize<'de> for PrimitiveValue {
                         3u64 => Ok(Field::field3),
                         4u64 => Ok(Field::field4),
                         5u64 => Ok(Field::field5),
+                        6u64 => Ok(Field::field6),
                         _ => Err(serde::de::Error::invalid_value(
                             serde::de::Unexpected::Unsigned(value),
-                            &"variant index 0 <= i < 6",
+                            &"variant index 0 <= i < 7",
                         )),
                     }
                 }
@@ -247,14 +293,18 @@ impl<'de> Deserialize<'de> for PrimitiveValue {
                             Ok(PrimitiveValue::False)
                         }
                         (Field::field3, variant) => Result::map(
-                            serde::de::VariantAccess::newtype_variant::<f64>(variant),
-                            PrimitiveValue::Number,
+                            serde::de::VariantAccess::newtype_variant::<u32>(variant),
+                            PrimitiveValue::U32,
                         ),
                         (Field::field4, variant) => Result::map(
+                            serde::de::VariantAccess::newtype_variant::<f64>(variant),
+                            PrimitiveValue::Float,
+                        ),
+                        (Field::field5, variant) => Result::map(
                             serde::de::VariantAccess::newtype_variant::<Hash16>(variant),
                             PrimitiveValue::Hash16,
                         ),
-                        (Field::field5, variant) => Result::map(
+                        (Field::field6, variant) => Result::map(
                             serde::de::VariantAccess::newtype_variant::<String>(variant),
                             PrimitiveValue::String,
                         ),
@@ -262,7 +312,7 @@ impl<'de> Deserialize<'de> for PrimitiveValue {
                 }
             }
             const VARIANTS: &'static [&'static str] =
-                &["Null", "True", "False", "Number", "Hash16", "String"];
+                &["Null", "True", "False", "U32", "Float", "Hash16", "String"];
             serde::Deserializer::deserialize_enum(
                 deserializer,
                 "PrimitiveValue",
@@ -289,13 +339,12 @@ mod test {
     }
 
     macro_rules! bincode {
-        ($value:expr) => {{
-            let x = bincode::DefaultOptions::default()
+        ($value:expr) => {
+            bincode::DefaultOptions::default()
                 .with_varint_encoding()
-                .serialize(&$value).unwrap();
-            println!("{:?} -> {:?} ({} bytes)", $value, x, x.len());
-            x
-        }};
+                .serialize(&$value)
+                .unwrap()
+        };
     }
 
     macro_rules! json_test {
@@ -310,42 +359,62 @@ mod test {
     }
 
     macro_rules! bincode_test {
-        ($value:expr) => {
+        ($value:expr, $size:expr) => {{
+            let ser = bincode!($value);
+            assert_eq!(ser.len(), $size);
             assert_eq!(
                 bincode::DefaultOptions::default()
                     .with_varint_encoding()
-                    .deserialize::<PrimitiveValue>(&bincode!($value)).unwrap(),
+                    .deserialize::<PrimitiveValue>(&ser)
+                    .unwrap(),
                 $value
             );
-        };
+        }};
     }
 
     macro_rules! same {
-        ($value:expr, $serialized:expr) => {{
+        ($size:expr, $value:expr, $serialized:expr) => {{
             json_test!($value, $serialized);
-            bincode_test!($value);
+            bincode_test!($value, $size);
         }};
     }
 
     #[test]
     fn json() {
-        same!(PrimitiveValue::Null, "null");
-        same!(PrimitiveValue::True, "true");
-        same!(PrimitiveValue::False, "false");
-        same!(PrimitiveValue::Number(6.0.into()), "6.0");
-        same!(PrimitiveValue::Number(0.0.into()), "0.0");
+        same!(1, PrimitiveValue::Null, "null");
+        same!(1, PrimitiveValue::True, "true");
+        same!(1, PrimitiveValue::False, "false");
+        same!(2, PrimitiveValue::U32(6), "6");
+        same!(4, PrimitiveValue::U32(255), "255");
         same!(
+            6,
+            PrimitiveValue::U32(std::u32::MAX),
+            format!("{}", std::u32::MAX)
+        );
+        same!(2, PrimitiveValue::U32(57), "57");
+        same!(9, PrimitiveValue::Float(0.31), "0.31");
+        same!(9, PrimitiveValue::Float(6.0), "6.0");
+        same!(9, PrimitiveValue::Float(0.0), "0.0");
+        same!(
+            9,
+            PrimitiveValue::Float(std::f64::MAX),
+            format!("{:e}", std::f64::MAX)
+        );
+        same!(
+            17,
             PrimitiveValue::Hash16(Hash16::MIN),
             "\"00000000000000000000000000000000\""
         );
         same!(
+            17,
             PrimitiveValue::Hash16(Hash16::MAX),
             "\"ffffffffffffffffffffffffffffffff\""
         );
         same!(
+            17,
             PrimitiveValue::Hash16(Hash16::MAX),
             "\"ffffffffffffffffffffffffffffffff\""
         );
-        same!(PrimitiveValue::String("Hello".into()), "\"Hello\"");
+        same!(7, PrimitiveValue::String("Hello".into()), "\"Hello\"");
     }
 }
