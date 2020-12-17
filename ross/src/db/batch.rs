@@ -63,6 +63,6 @@ impl<'a> Batch<'a> {
     /// Perform the atomic batch write.
     #[inline(always)]
     pub fn write(self) -> Result<()> {
-        self.db.db.write(self.batch).map_err(|e| Error::DBError(e))
+        self.db.db.write(self.batch).map_err(Error::DBError)
     }
 }

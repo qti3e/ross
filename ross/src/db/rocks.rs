@@ -73,10 +73,7 @@ impl DB {
     {
         let key = key.serialize();
         let cf = K::cf(&self.cf);
-        let pinned = self
-            .db
-            .get_pinned_cf(cf, key)
-            .map_err(|e| Error::DBError(e))?;
+        let pinned = self.db.get_pinned_cf(cf, key).map_err(Error::DBError)?;
         let bytes = match pinned {
             Some(slice) => slice,
             None => return Ok(None),
@@ -93,9 +90,7 @@ impl DB {
         let key = key.serialize();
         let cf = K::cf(&self.cf);
         let value = bincode::serialize(value).unwrap();
-        self.db
-            .merge_cf(cf, key, value)
-            .map_err(|e| Error::DBError(e))
+        self.db.merge_cf(cf, key, value).map_err(Error::DBError)
     }
 
     /// Returns an iterator over keys with the same prefix as the provided value.
