@@ -1,7 +1,7 @@
 #[macro_export]
 macro_rules! db_schema {
     (
-        $trait_name:ident / $read_trait_name:ident {
+        ($cf_trait:ident, $write_trait:ident, $read_trait:ident) {
             $(
                 $(#[$attr:meta])*
                 cf $cf_name:ident($key_name:ident:$key_type:ty) -> $value_type:ty {
@@ -17,15 +17,12 @@ macro_rules! db_schema {
             pub(super) const $cf_name: &str = stringify!($cf_name);
         )*
 
-        pub trait $trait_name<Value> {
-            fn serialize(self) -> Vec<u8>;
+        pub trait $cf_trait {
             fn cf<'a>(cf: &'a CF) -> &'a rocksdb::ColumnFamily;
         }
 
-        pub trait $read_trait_name<Value> {
-            fn serialize(self) -> Vec<u8>;
-            fn cf<'a>(cf: &'a CF) -> &'a rocksdb::ColumnFamily;
-        }
+        pub trait $read_trait<Value>: $cf_trait {}
+        pub trait $write_trait<Value>: $cf_trait {}
 
         #[allow(non_snake_case)]
         pub struct CF {
@@ -52,46 +49,29 @@ macro_rules! db_schema {
             #[derive(Debug, Serialize, Deserialize)]
             struct $key_name(pub $key_type);
 
-            impl $trait_name<$value_type> for $key_name {
-                #[inline]
-                fn serialize(self) -> Vec<u8> {
-                    bincode::serialize(&self.0).unwrap()
-                }
-
+            impl $cf_trait for $key_name {
                 #[inline]
                 fn cf<'a>(cf: &'a CF) -> &'a rocksdb::ColumnFamily {
                     &cf.$cf_name
                 }
             }
 
-            impl $read_trait_name<$value_type> for $key_name {
-                #[inline]
-                fn serialize(self) -> Vec<u8> {
-                    bincode::serialize(&self.0).unwrap()
-                }
-
-                #[inline]
-                fn cf<'a>(cf: &'a CF) -> &'a rocksdb::ColumnFamily {
-                    &cf.$cf_name
-                }
-            }
+            impl $read_trait<$value_type> for $key_name {}
+            impl $write_trait<$value_type> for $key_name {}
 
             $(
                 $(#[$partial_attr])*
                 #[derive(Debug, Serialize, Deserialize)]
                 struct $partial_name(pub $key_type);
 
-                impl $read_trait_name<$partial_type> for $partial_name {
-                    #[inline]
-                    fn serialize(self) -> Vec<u8> {
-                        bincode::serialize(&self.0).unwrap()
-                    }
-
+                impl $cf_trait for $partial_name {
                     #[inline]
                     fn cf<'a>(cf: &'a CF) -> &'a rocksdb::ColumnFamily {
                         &cf.$cf_name
                     }
                 }
+
+                impl $read_trait<$partial_type> for $partial_name {}
             )*
         )*
     }

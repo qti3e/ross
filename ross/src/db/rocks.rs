@@ -1,5 +1,6 @@
 use super::{
-    keys::{self, DBKey, ReadOnlyDBKey, CF},
+    bincode::{deserialize, serialize},
+    keys::{self, DbKey, DbReadKey, DbWriteKey, CF},
     Batch,
 };
 use crate::error::{Error, Result};
@@ -68,38 +69,40 @@ impl DB {
 
     pub fn get<K, V>(&self, key: K) -> Result<Option<V>>
     where
-        K: ReadOnlyDBKey<V>,
+        K: DbReadKey<V> + serde::Serialize,
         V: serde::de::DeserializeOwned,
     {
-        let key = key.serialize();
         let cf = K::cf(&self.cf);
-        let pinned = self.db.get_pinned_cf(cf, key).map_err(Error::DBError)?;
+        let pinned = self
+            .db
+            .get_pinned_cf(cf, serialize(&key))
+            .map_err(Error::DBError)?;
         let bytes = match pinned {
             Some(slice) => slice,
             None => return Ok(None),
         };
-        let data = bincode::deserialize(bytes.as_ref()).unwrap();
+        let data = deserialize(bytes.as_ref());
         Ok(Some(data))
     }
 
     #[inline(always)]
     pub fn push<K, I: serde::Serialize>(&self, key: K, value: &I) -> Result<()>
     where
-        K: DBKey<Vec<I>>,
+        K: DbWriteKey<Vec<I>> + serde::Serialize,
     {
-        let key = key.serialize();
         let cf = K::cf(&self.cf);
-        let value = bincode::serialize(value).unwrap();
-        self.db.merge_cf(cf, key, value).map_err(Error::DBError)
+        self.db
+            .merge_cf(cf, serialize(&key), serialize(value))
+            .map_err(Error::DBError)
     }
 
     /// Returns an iterator over keys with the same prefix as the provided value.
-    pub fn prefix_key_iterator<'a: 'b, 'b, K, V, P: AsRef<[u8]>>(
+    pub fn prefix_key_iterator<'a: 'b, 'b, K, P: AsRef<[u8]>>(
         &'a self,
         prefix: P,
     ) -> KeyIterator<'b, K>
     where
-        K: ReadOnlyDBKey<V> + serde::de::DeserializeOwned,
+        K: DbKey + serde::de::DeserializeOwned,
     {
         let cf = K::cf(&self.cf);
         KeyIterator {
@@ -115,7 +118,7 @@ impl DB {
         prefix: P,
     ) -> KeyValueIterator<'b, K, V>
     where
-        K: ReadOnlyDBKey<V> + serde::de::DeserializeOwned,
+        K: DbReadKey<V> + serde::de::DeserializeOwned,
         V: serde::de::DeserializeOwned,
     {
         let cf = K::cf(&self.cf);
@@ -149,9 +152,7 @@ where
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        self.inner
-            .next()
-            .map(|(k, _)| bincode::deserialize(k.as_ref()).unwrap())
+        self.inner.next().map(|(k, _)| deserialize(k.as_ref()))
     }
 }
 
@@ -169,11 +170,8 @@ where
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        self.inner.next().map(|(k, v)| {
-            (
-                bincode::deserialize(k.as_ref()).unwrap(),
-                bincode::deserialize(v.as_ref()).unwrap(),
-            )
-        })
+        self.inner
+            .next()
+            .map(|(k, v)| (deserialize(k.as_ref()), deserialize(v.as_ref())))
     }
 }

@@ -1,5 +1,6 @@
 #[macro_use]
 mod macros;
+mod bincode;
 
 mod batch;
 pub use batch::*;

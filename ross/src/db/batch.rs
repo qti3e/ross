@@ -1,5 +1,5 @@
-use super::keys::DBKey;
 use super::DB;
+use super::{bincode::serialize, keys::DbWriteKey};
 use crate::error::{Error, Result};
 
 /// An atomic batch of write operations. This is a type safe wrapper around
@@ -20,44 +20,38 @@ impl<'a> Batch<'a> {
     #[inline(always)]
     pub fn put<K, V: serde::Serialize>(&mut self, key: K, value: &V)
     where
-        K: DBKey<V>,
+        K: DbWriteKey<V> + serde::Serialize,
     {
-        let key = key.serialize();
         let cf = K::cf(&self.db.cf);
-        let value = bincode::serialize(value).unwrap();
-        self.batch.put_cf(cf, key, value);
+        self.batch.put_cf(cf, serialize(&key), serialize(value));
     }
 
     #[inline(always)]
     pub fn delete<K, V>(&mut self, key: K)
     where
-        K: DBKey<V>,
+        K: DbWriteKey<V> + serde::Serialize,
     {
-        let key = key.serialize();
         let cf = K::cf(&self.db.cf);
-        self.batch.delete_cf(cf, key);
+        self.batch.delete_cf(cf, serialize(&key));
     }
 
     #[inline(always)]
     pub fn delete_range<K, V>(&mut self, from: K, to: K)
     where
-        K: DBKey<V>,
+        K: DbWriteKey<V> + serde::Serialize,
     {
-        let from = from.serialize();
-        let to = to.serialize();
         let cf = K::cf(&self.db.cf);
-        self.batch.delete_range_cf(cf, from, to);
+        self.batch
+            .delete_range_cf(cf, serialize(&from), serialize(&to));
     }
 
     #[inline(always)]
     pub fn push<K, I: serde::Serialize>(&mut self, key: K, value: &I)
     where
-        K: DBKey<Vec<I>>,
+        K: DbWriteKey<Vec<I>> + serde::Serialize,
     {
-        let key = key.serialize();
-        let value = bincode::serialize(value).unwrap();
         let cf = K::cf(&self.db.cf);
-        self.batch.merge_cf(cf, key, value);
+        self.batch.merge_cf(cf, serialize(&key), serialize(value));
     }
 
     /// Perform the atomic batch write.

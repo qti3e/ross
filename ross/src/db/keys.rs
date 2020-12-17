@@ -2,7 +2,7 @@ use crate::db_schema;
 use crate::types::*;
 use serde::{Deserialize, Serialize};
 
-db_schema!(DBKey / ReadOnlyDBKey {
+db_schema!((DbKey, DbWriteKey, DbReadKey) {
     /// Store the history of a repository.
     cf LOG(Log:RepositoryId) -> Vec<LogEvent> {},
     /// Store information regarding each repository.
