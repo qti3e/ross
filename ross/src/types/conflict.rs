@@ -20,3 +20,11 @@ pub enum MergeConflict {
         origin: Object,
     },
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum PatchConflict {
+    IdConflict { oid: ObjectId },
+    WriteWrite { oid: ObjectId, field: FieldIndex },
+    DeleteWrite { oid: ObjectId },
+    WriteDelete { oid: ObjectId },
+}
