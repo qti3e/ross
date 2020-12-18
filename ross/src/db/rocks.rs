@@ -66,18 +66,8 @@ impl DB {
         Batch::new(self)
     }
 
-    pub fn get<
-        K: serde::Serialize + serde::de::DeserializeOwned,
-        V: serde::Serialize + serde::de::DeserializeOwned,
-        T,
-    >(
-        &self,
-        key: T,
-    ) -> Result<Option<V>>
-    where
-        T: DbReadKey<K, V>,
-    {
-        let cf = T::cf(&self.cf);
+    pub fn get<K: DbReadKey>(&self, key: K) -> Result<Option<K::Value>> {
+        let cf = K::cf(&self.cf);
         let pinned = self
             .db
             .get_pinned_cf(cf, serialize(key.key()))
@@ -91,19 +81,12 @@ impl DB {
     }
 
     #[inline(always)]
-    pub fn push<
-        K: serde::Serialize + serde::de::DeserializeOwned,
-        I: serde::Serialize + serde::de::DeserializeOwned,
-        T,
-    >(
+    pub fn push<K: DbWriteKey<Value = Vec<I>>, I: serde::Serialize>(
         &self,
-        key: T,
+        key: K,
         value: &I,
-    ) -> Result<()>
-    where
-        T: DbWriteKey<K, Vec<I>>,
-    {
-        let cf = T::cf(&self.cf);
+    ) -> Result<()> {
+        let cf = K::cf(&self.cf);
         self.db
             .merge_cf(cf, serialize(key.key()), serialize(value))
             .map_err(Error::DBError)
@@ -111,15 +94,11 @@ impl DB {
 
     /// Returns an iterator over keys with the same prefix as the provided value.
     /// One should prefer using `keys::Key::key_iterator(&db, prefix)` for simplicity.
-    pub fn prefix_key_iterator<'a: 'b, 'b, K, T, P: AsRef<[u8]>>(
+    pub fn prefix_key_iterator<'a: 'b, 'b, K: DbKey, P: AsRef<[u8]>>(
         &'a self,
         prefix: P,
-    ) -> KeyIterator<'b, K>
-    where
-        K: serde::Serialize + serde::de::DeserializeOwned,
-        T: DbKey<K>,
-    {
-        let cf = T::cf(&self.cf);
+    ) -> KeyIterator<'b, K::Key> {
+        let cf = K::cf(&self.cf);
         KeyIterator {
             inner: self.db.prefix_iterator_cf(cf, prefix),
             phantom: PhantomData,
@@ -127,18 +106,13 @@ impl DB {
     }
 
     /// Returns an iterator over key-value pairs where the key has the same prefix
-    /// with the provided value.  
+    /// with the provided value.
     /// One should prefer using `keys::Key::key_value_iterator(&db, prefix)` for simplicity.
-    pub fn prefix_iterator<'a: 'b, 'b, K, V, T, P: AsRef<[u8]>>(
+    pub fn prefix_iterator<'a: 'b, 'b, K: DbReadKey, P: AsRef<[u8]>>(
         &'a self,
         prefix: P,
-    ) -> KeyValueIterator<'b, K, V>
-    where
-        K: serde::Serialize + serde::de::DeserializeOwned,
-        V: serde::Serialize + serde::de::DeserializeOwned,
-        T: DbReadKey<K, V>,
-    {
-        let cf = T::cf(&self.cf);
+    ) -> KeyValueIterator<'b, K::Key, K::Value> {
+        let cf = K::cf(&self.cf);
         KeyValueIterator {
             inner: self.db.prefix_iterator_cf(cf, prefix),
             phantom: PhantomData,

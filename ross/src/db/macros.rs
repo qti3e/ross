@@ -17,12 +17,15 @@ macro_rules! db_schema {
             pub(super) const $cf_name: &str = stringify!($cf_name);
         )*
 
-        pub trait $cf_trait<K: serde::Serialize + serde::de::DeserializeOwned>: Sized {
+        pub trait $cf_trait: Sized {
+            /// Actual type of the key.
+            type Key: serde::Serialize + serde::de::DeserializeOwned;
+
             /// Returns the column family used to store this key.
             fn cf<'a>(cf: &'a CF) -> &'a rocksdb::ColumnFamily;
 
             /// Returns a reference to the inner key.
-            fn key(&self) -> &K;
+            fn key(&self) -> &Self::Key;
 
             /// Returns an iterator over all of the keys in the given database, that are
             /// of the same type as Self and start with the given prefix.
@@ -32,12 +35,15 @@ macro_rules! db_schema {
             /// for branch_id in iter { }
             /// ```
             #[inline]
-            fn key_iterator<'d, P: AsRef<[u8]>>(db: &'d DB, prefix: P) -> KeyIterator<'d, K> {
-                db.prefix_key_iterator::<'d, 'd, K, Self, P>(prefix)
+            fn key_iterator<'d: 'b, 'b, P: serde::Serialize>(db: &'d DB, prefix: &P) -> KeyIterator<'b, Self::Key> {
+                db.prefix_key_iterator::<'d, 'b, Self, Vec<u8>>(serialize(prefix))
             }
         }
 
-        pub trait $read_trait<Key: serde::Serialize + serde::de::DeserializeOwned, Value: serde::Serialize + serde::de::DeserializeOwned>: $cf_trait<Key> {
+        pub trait $read_trait: $cf_trait {
+            /// Type of the value associated with this key.
+            type Value: serde::Serialize + serde::de::DeserializeOwned;
+
             /// Returns an iterator over all of the key-value pairs in the given database that are
             /// of the same type as Self and their key starts with the given prefix.
             /// ```
@@ -46,12 +52,12 @@ macro_rules! db_schema {
             /// for (branch_id, branch_info) in iter { }
             /// ```
             #[inline]
-            fn key_value_iterator<'d, P: AsRef<[u8]>>(db: &'d DB, prefix: P) -> KeyValueIterator<'d, Key, Value> {
-                db.prefix_iterator::<'d, 'd, Key, Value, Self, P>(prefix)
+            fn key_value_iterator<'d: 'b, 'b, P: serde::Serialize>(db: &'d DB, prefix: &P) -> KeyValueIterator<'b, Self::Key, Self::Value> {
+                db.prefix_iterator::<'d, 'b, Self, Vec<u8>>(serialize(prefix))
             }
         }
 
-        pub trait $write_trait<Key: serde::Serialize + serde::de::DeserializeOwned, Value: serde::Serialize + serde::de::DeserializeOwned>: $cf_trait<Key> {}
+        pub trait $write_trait: $read_trait {}
 
         #[allow(non_snake_case)]
         pub struct CF {
@@ -78,9 +84,11 @@ macro_rules! db_schema {
             #[derive(Debug)]
             pub struct $key_name<'a>(pub &'a $key_type);
 
-            impl<'a> $cf_trait<$key_type> for $key_name<'a> {
+            impl<'a> $cf_trait for $key_name<'a> {
+                type Key = $key_type;
+
                 #[inline]
-                fn key(&self) -> &$key_type { self.0 }
+                fn key(&self) -> &Self::Key { self.0 }
 
                 #[inline]
                 fn cf<'c>(cf: &'c CF) -> &'c rocksdb::ColumnFamily {
@@ -88,17 +96,22 @@ macro_rules! db_schema {
                 }
             }
 
-            impl<'a> $read_trait<$key_type, $value_type> for $key_name<'a> {}
-            impl<'a> $write_trait<$key_type, $value_type> for $key_name <'a>{}
+            impl<'a> $read_trait for $key_name<'a> {
+                type Value = $value_type;
+            }
+
+            impl<'a> $write_trait for $key_name<'a> {}
 
             $(
                 $(#[$partial_attr])*
                 #[derive(Debug)]
                 pub struct $partial_name<'a>(pub &'a $key_type);
 
-                impl<'a> $cf_trait<$key_type> for $partial_name<'a> {
+                impl<'a> $cf_trait for $partial_name<'a> {
+                    type Key = $key_type;
+
                     #[inline]
-                    fn key(&self) -> &$key_type { self.0 }
+                    fn key(&self) -> &Self::Key { self.0 }
 
                     #[inline]
                     fn cf<'c>(cf: &'c CF) -> &'c rocksdb::ColumnFamily {
@@ -106,7 +119,9 @@ macro_rules! db_schema {
                     }
                 }
 
-                impl<'a> $read_trait<$key_type, $partial_type> for $partial_name<'a> {}
+                impl<'a> $read_trait for $partial_name<'a> {
+                    type Value = $partial_type;
+                }
             )*
         )*
     }

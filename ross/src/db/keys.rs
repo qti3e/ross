@@ -1,3 +1,4 @@
+use super::bincode::*;
 use super::{iterator::*, DB};
 use crate::db_schema;
 use crate::types::*;
@@ -8,7 +9,7 @@ db_schema!((DbKey, DbWriteKey, DbReadKey) {
     /// Store information regarding each repository.
     cf REPOSITORIES(Repository:RepositoryId) -> RepositoryInfo {
         /// Used to check if a repository exists without the cost of deserializing
-        /// it's information.
+        /// its information.
         RepositoryExists -> ();
     },
     /// Store information regarding each branch.

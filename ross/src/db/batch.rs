@@ -18,67 +18,28 @@ impl<'a> Batch<'a> {
     }
 
     #[inline(always)]
-    pub fn put<
-        K: serde::Serialize + serde::de::DeserializeOwned,
-        V: serde::Serialize + serde::de::DeserializeOwned,
-        T,
-    >(
-        &mut self,
-        key: T,
-        value: &V,
-    ) where
-        T: DbWriteKey<K, V>,
-    {
-        let cf = T::cf(&self.db.cf);
+    pub fn put<K: DbWriteKey>(&mut self, key: K, value: &K::Value) {
+        let cf = K::cf(&self.db.cf);
         self.batch
             .put_cf(cf, serialize(key.key()), serialize(value));
     }
 
     #[inline(always)]
-    pub fn delete<
-        K: serde::Serialize + serde::de::DeserializeOwned,
-        V: serde::Serialize + serde::de::DeserializeOwned,
-        T,
-    >(
-        &mut self,
-        key: T,
-    ) where
-        T: DbWriteKey<K, V>,
-    {
-        let cf = T::cf(&self.db.cf);
+    pub fn delete<K: DbWriteKey>(&mut self, key: K) {
+        let cf = K::cf(&self.db.cf);
         self.batch.delete_cf(cf, serialize(key.key()));
     }
 
     #[inline(always)]
-    pub fn delete_range<
-        K: serde::Serialize + serde::de::DeserializeOwned,
-        V: serde::Serialize + serde::de::DeserializeOwned,
-        T,
-    >(
-        &mut self,
-        from: T,
-        to: T,
-    ) where
-        T: DbWriteKey<K, V>,
-    {
-        let cf = T::cf(&self.db.cf);
+    pub fn delete_range<K: DbWriteKey>(&mut self, from: K, to: K) {
+        let cf = K::cf(&self.db.cf);
         self.batch
             .delete_range_cf(cf, serialize(from.key()), serialize(to.key()));
     }
 
     #[inline(always)]
-    pub fn push<
-        K: serde::Serialize + serde::de::DeserializeOwned,
-        I: serde::Serialize + serde::de::DeserializeOwned,
-        T,
-    >(
-        &mut self,
-        key: T,
-        value: &I,
-    ) where
-        T: DbWriteKey<K, Vec<I>>,
-    {
-        let cf = T::cf(&self.db.cf);
+    pub fn push<K: DbWriteKey<Value = Vec<I>>, I: serde::Serialize>(&mut self, key: K, value: &I) {
+        let cf = K::cf(&self.db.cf);
         self.batch
             .merge_cf(cf, serialize(key.key()), serialize(value));
     }
