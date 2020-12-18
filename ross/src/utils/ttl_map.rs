@@ -6,7 +6,7 @@ use std::hash::Hash;
 
 /// A map that drops its elements after an expiration time, if they are
 /// accessed until then the expiration time gets invalidated.
-pub struct DropMap<K, V> {
+pub struct TTLMap<K, V> {
     data: HashMap<K, Entry<V>>,
     /// How many to-be-dropped elements are we allowed to hold until we
     /// trigger the GC.
@@ -21,9 +21,9 @@ struct Entry<V> {
     expiration: Option<clock::Timestamp>,
 }
 
-impl<K: Copy + Hash + Eq, V: Clone> DropMap<K, V> {
+impl<K: Copy + Hash + Eq, V: Clone> TTLMap<K, V> {
     pub fn new(capacity: usize, ttl: clock::Timestamp) -> Self {
-        DropMap {
+        TTLMap {
             data: HashMap::with_capacity(capacity + 1),
             capacity,
             drop_queue: BTreeMap::new(),
@@ -71,8 +71,6 @@ impl<K: Copy + Hash + Eq, V: Clone> DropMap<K, V> {
             self.to_drop_count -= 1;
         }
 
-        // This map always returns a clone of the data, it's supposed to work with
-        // `RC`, `Arc`, `Box` and other smart pointers.
         Ok(&data.value)
     }
 
@@ -158,7 +156,7 @@ fn cancel_drop<K: Eq + Hash + Copy>(
 
 #[cfg(test)]
 mod test {
-    use super::DropMap;
+    use super::TTLMap;
     use std::error::Error;
     use std::fmt;
 
@@ -183,7 +181,7 @@ mod test {
             Ok(String::from("Hello"))
         };
 
-        let mut map = DropMap::<i32, String>::new(3, 0);
+        let mut map = TTLMap::<i32, String>::new(3, 0);
         assert_eq!(
             map.get_or_maybe_insert_with(0, || getter()),
             Ok(&String::from("Hello"))
@@ -198,7 +196,7 @@ mod test {
     #[test]
     fn error() {
         let getter = || -> Result<String, MapError> { Err(MapError::CustomError) };
-        let mut map = DropMap::<i32, String>::new(3, 0);
+        let mut map = TTLMap::<i32, String>::new(3, 0);
         assert_eq!(
             map.get_or_maybe_insert_with(0, getter),
             Err(MapError::CustomError)
@@ -207,7 +205,7 @@ mod test {
 
     #[test]
     fn gc() {
-        let mut map = DropMap::<i32, i32>::new(2, 1);
+        let mut map = TTLMap::<i32, i32>::new(2, 1);
         map.get_or_maybe_insert_with(0, || -> Result<i32, MapError> { Ok(1) })
             .unwrap();
         map.get_or_maybe_insert_with(1, || -> Result<i32, MapError> { Ok(10) })

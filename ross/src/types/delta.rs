@@ -1,4 +1,4 @@
-use super::{FieldIndex, Object, ObjectId, ObjectVersion, PrimitiveValue};
+use super::{FieldIndex, ObjectId, ObjectVersion, PrimitiveValue};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 

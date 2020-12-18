@@ -47,7 +47,7 @@ macro_rules! db_schema {
         $(
             $(#[$attr])*
             #[derive(Debug, Serialize, Deserialize)]
-            struct $key_name(pub $key_type);
+            pub struct $key_name(pub $key_type);
 
             impl $cf_trait for $key_name {
                 #[inline]
@@ -62,7 +62,7 @@ macro_rules! db_schema {
             $(
                 $(#[$partial_attr])*
                 #[derive(Debug, Serialize, Deserialize)]
-                struct $partial_name(pub $key_type);
+                pub struct $partial_name(pub $key_type);
 
                 impl $cf_trait for $partial_name {
                     #[inline]

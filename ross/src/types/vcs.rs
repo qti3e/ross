@@ -4,23 +4,23 @@ use crate::utils::hash::*;
 use serde::{Deserialize, Serialize};
 
 /// An opaque type that represents a User UUID.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
 pub struct UserId(pub Hash16);
 
 /// An opaque type that represents a Repository UUID.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
 pub struct RepositoryId(pub Hash16);
 
 /// An opaque type that represents a Branch UUID.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
 pub struct BranchId(pub Hash16);
 
 /// An opaque type that represents a Commit Hash.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
 pub struct CommitHash(pub Hash20);
 
 /// A branch id, prefixed by the repository id.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
 pub struct BranchIdentifier {
     pub repository: RepositoryId,
     pub id: BranchId,
@@ -38,7 +38,7 @@ pub struct CommitIdentifier {
 /// it is prefixed by the target's repository id, so when inserted in the database, it
 /// will be possible to get an iterator over all of the open (pending) merge requests
 /// of a repository using a rocksdb prefix-iterator.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
 pub struct MergeBranchId {
     pub target: BranchIdentifier,
     pub source: BranchIdentifier,
@@ -130,4 +130,23 @@ pub struct CommitInfo {
     pub committer: UserId,
     pub authors: Vec<UserId>,
     pub message: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
+#[serde(untagged)]
+pub enum BranchOrMergeBranchId {
+    MergeBranch(MergeBranchId),
+    Branch(BranchIdentifier),
+}
+
+impl From<BranchIdentifier> for BranchOrMergeBranchId {
+    fn from(id: BranchIdentifier) -> Self {
+        BranchOrMergeBranchId::Branch(id)
+    }
+}
+
+impl From<MergeBranchId> for BranchOrMergeBranchId {
+    fn from(id: MergeBranchId) -> Self {
+        BranchOrMergeBranchId::MergeBranch(id)
+    }
 }

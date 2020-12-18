@@ -23,30 +23,11 @@ db_schema!((DbKey, DbWriteKey, DbReadKey) {
         CommitOrigin -> CommitInfoOrigin;
     },
     /// Store a vector of live changes that are not yet committed.
-    cf LIVE_CHANGES(LiveChanges:BranchOrMergeBranch) -> Vec<Patch> {},
+    cf LIVE_CHANGES(LiveChanges:BranchOrMergeBranchId) -> Vec<Patch> {},
     /// We only store a limited number of patches in LIVE_CHANGES, after a
     /// threshold we compute the delta of a branch/merge-branch to its original
     /// state and store that instead of all other patches.
-    cf PACKED_DELTA(PackedDelta:BranchOrMergeBranch) -> Delta {},
+    cf PACKED_DELTA(PackedDelta:BranchOrMergeBranchId) -> Delta {},
     /// This column family is used to store the snapshot of each commit.
     cf SNAPSHOT(CommitSnapshot:CommitIdentifier) -> SnapshotEntry {}
 });
-
-#[derive(Debug, Serialize, Deserialize)]
-#[repr(u8)]
-pub enum BranchOrMergeBranch {
-    Branch(BranchIdentifier),
-    MergeBranch(MergeBranchId),
-}
-
-impl From<BranchIdentifier> for BranchOrMergeBranch {
-    fn from(id: BranchIdentifier) -> Self {
-        BranchOrMergeBranch::Branch(id)
-    }
-}
-
-impl From<MergeBranchId> for BranchOrMergeBranch {
-    fn from(id: MergeBranchId) -> Self {
-        BranchOrMergeBranch::MergeBranch(id)
-    }
-}

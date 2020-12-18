@@ -3,16 +3,17 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
-pub mod context;
+pub mod api;
 pub mod db;
 pub mod error;
 pub mod types;
-mod utils;
+pub mod utils;
 
 fn main() {
     let mut options = rocksdb::Options::default();
     options.create_if_missing(true);
     options.create_missing_column_families(true);
+    options.increase_parallelism(4);
     let db: Arc<rocksdb::DB> = Arc::new(rocksdb::DB::open(&options, "path").unwrap());
     db.compact_range(None::<&[u8]>, None::<&[u8]>);
 
@@ -26,7 +27,7 @@ fn main() {
         while s1.load(Ordering::SeqCst) != 0 {}
         loop {
             d1.put([100], [10]).unwrap();
-            w1.fetch_add(1, Ordering::SeqCst);
+            w1.fetch_add(1, Ordering::Relaxed);
         }
     });
 
@@ -37,7 +38,18 @@ fn main() {
         while s2.load(Ordering::SeqCst) != 0 {}
         loop {
             d2.put([120], [0x17]).unwrap();
-            w2.fetch_add(1, Ordering::SeqCst);
+            w2.fetch_add(1, Ordering::Relaxed);
+        }
+    });
+
+    let d3 = db.clone();
+    let s3 = spinlock.clone();
+    let w3 = writes.clone();
+    thread::spawn(move || {
+        while s3.load(Ordering::SeqCst) != 0 {}
+        loop {
+            d3.put([150], [0x37]).unwrap();
+            w3.fetch_add(1, Ordering::Relaxed);
         }
     });
 
@@ -48,7 +60,7 @@ fn main() {
             std::thread::sleep(Duration::from_millis(100));
             let d = db.get([100]).unwrap();
             let t = now.elapsed().as_millis();
-            let n = writes.load(Ordering::SeqCst);
+            let n = writes.load(Ordering::Relaxed);
             let s = (n as f64) / (t as f64);
             println!("d = {:?}, n = {}, t = {}ms, s = {}", d, n, t, s);
         }

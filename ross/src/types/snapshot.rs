@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize, Deserialize)]
 pub enum SnapshotEntry {
     Delta {
-        source: CommitIdentifier,
+        base: CommitIdentifier,
         delta: Delta,
     },
     Snapshot(State),
