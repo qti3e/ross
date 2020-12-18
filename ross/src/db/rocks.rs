@@ -1,8 +1,7 @@
-use super::{
-    bincode::{deserialize, serialize},
-    keys::{self, DbKey, DbReadKey, DbWriteKey, CF},
-    Batch,
-};
+use super::bincode::{deserialize, serialize};
+use super::iterator::*;
+use super::keys::{self, DbKey, DbReadKey, DbWriteKey, CF};
+use super::Batch;
 use crate::error::{Error, Result};
 use crate::utils::bincode_vec_push::merge_push;
 use std::marker::PhantomData;
@@ -67,15 +66,21 @@ impl DB {
         Batch::new(self)
     }
 
-    pub fn get<K, V>(&self, key: K) -> Result<Option<V>>
+    pub fn get<
+        K: serde::Serialize + serde::de::DeserializeOwned,
+        V: serde::Serialize + serde::de::DeserializeOwned,
+        T,
+    >(
+        &self,
+        key: T,
+    ) -> Result<Option<V>>
     where
-        K: DbReadKey<V> + serde::Serialize,
-        V: serde::de::DeserializeOwned,
+        T: DbReadKey<K, V>,
     {
-        let cf = K::cf(&self.cf);
+        let cf = T::cf(&self.cf);
         let pinned = self
             .db
-            .get_pinned_cf(cf, serialize(&key))
+            .get_pinned_cf(cf, serialize(key.key()))
             .map_err(Error::DBError)?;
         let bytes = match pinned {
             Some(slice) => slice,
@@ -86,25 +91,35 @@ impl DB {
     }
 
     #[inline(always)]
-    pub fn push<K, I: serde::Serialize>(&self, key: K, value: &I) -> Result<()>
+    pub fn push<
+        K: serde::Serialize + serde::de::DeserializeOwned,
+        I: serde::Serialize + serde::de::DeserializeOwned,
+        T,
+    >(
+        &self,
+        key: T,
+        value: &I,
+    ) -> Result<()>
     where
-        K: DbWriteKey<Vec<I>> + serde::Serialize,
+        T: DbWriteKey<K, Vec<I>>,
     {
-        let cf = K::cf(&self.cf);
+        let cf = T::cf(&self.cf);
         self.db
-            .merge_cf(cf, serialize(&key), serialize(value))
+            .merge_cf(cf, serialize(key.key()), serialize(value))
             .map_err(Error::DBError)
     }
 
     /// Returns an iterator over keys with the same prefix as the provided value.
-    pub fn prefix_key_iterator<'a: 'b, 'b, K, P: AsRef<[u8]>>(
+    /// One should prefer using `keys::Key::key_iterator(&db, prefix)` for simplicity.
+    pub fn prefix_key_iterator<'a: 'b, 'b, K, T, P: AsRef<[u8]>>(
         &'a self,
         prefix: P,
     ) -> KeyIterator<'b, K>
     where
-        K: DbKey + serde::de::DeserializeOwned,
+        K: serde::Serialize + serde::de::DeserializeOwned,
+        T: DbKey<K>,
     {
-        let cf = K::cf(&self.cf);
+        let cf = T::cf(&self.cf);
         KeyIterator {
             inner: self.db.prefix_iterator_cf(cf, prefix),
             phantom: PhantomData,
@@ -112,16 +127,18 @@ impl DB {
     }
 
     /// Returns an iterator over key-value pairs where the key has the same prefix
-    /// with the provided value.
-    pub fn prefix_iterator<'a: 'b, 'b, K, V, P: AsRef<[u8]>>(
+    /// with the provided value.  
+    /// One should prefer using `keys::Key::key_value_iterator(&db, prefix)` for simplicity.
+    pub fn prefix_iterator<'a: 'b, 'b, K, V, T, P: AsRef<[u8]>>(
         &'a self,
         prefix: P,
     ) -> KeyValueIterator<'b, K, V>
     where
-        K: DbReadKey<V> + serde::de::DeserializeOwned,
-        V: serde::de::DeserializeOwned,
+        K: serde::Serialize + serde::de::DeserializeOwned,
+        V: serde::Serialize + serde::de::DeserializeOwned,
+        T: DbReadKey<K, V>,
     {
-        let cf = K::cf(&self.cf);
+        let cf = T::cf(&self.cf);
         KeyValueIterator {
             inner: self.db.prefix_iterator_cf(cf, prefix),
             phantom: PhantomData,
@@ -137,41 +154,4 @@ fn vec_push_merge(
 ) -> Option<Vec<u8>> {
     let result = merge_push(existing_val, operands);
     Some(result)
-}
-
-pub struct KeyIterator<'a, K> {
-    inner: rocksdb::DBIterator<'a>,
-    phantom: PhantomData<K>,
-}
-
-impl<'a, K> Iterator for KeyIterator<'a, K>
-where
-    K: serde::de::DeserializeOwned,
-{
-    type Item = K;
-
-    #[inline]
-    fn next(&mut self) -> Option<Self::Item> {
-        self.inner.next().map(|(k, _)| deserialize(k.as_ref()))
-    }
-}
-
-pub struct KeyValueIterator<'a, K, V> {
-    inner: rocksdb::DBIterator<'a>,
-    phantom: PhantomData<(K, V)>,
-}
-
-impl<'a, K, V> Iterator for KeyValueIterator<'a, K, V>
-where
-    K: serde::de::DeserializeOwned,
-    V: serde::de::DeserializeOwned,
-{
-    type Item = (K, V);
-
-    #[inline]
-    fn next(&mut self) -> Option<Self::Item> {
-        self.inner
-            .next()
-            .map(|(k, v)| (deserialize(k.as_ref()), deserialize(v.as_ref())))
-    }
 }

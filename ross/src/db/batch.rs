@@ -18,40 +18,69 @@ impl<'a> Batch<'a> {
     }
 
     #[inline(always)]
-    pub fn put<K, V: serde::Serialize>(&mut self, key: K, value: &V)
-    where
-        K: DbWriteKey<V> + serde::Serialize,
+    pub fn put<
+        K: serde::Serialize + serde::de::DeserializeOwned,
+        V: serde::Serialize + serde::de::DeserializeOwned,
+        T,
+    >(
+        &mut self,
+        key: T,
+        value: &V,
+    ) where
+        T: DbWriteKey<K, V>,
     {
-        let cf = K::cf(&self.db.cf);
-        self.batch.put_cf(cf, serialize(&key), serialize(value));
-    }
-
-    #[inline(always)]
-    pub fn delete<K, V>(&mut self, key: K)
-    where
-        K: DbWriteKey<V> + serde::Serialize,
-    {
-        let cf = K::cf(&self.db.cf);
-        self.batch.delete_cf(cf, serialize(&key));
-    }
-
-    #[inline(always)]
-    pub fn delete_range<K, V>(&mut self, from: K, to: K)
-    where
-        K: DbWriteKey<V> + serde::Serialize,
-    {
-        let cf = K::cf(&self.db.cf);
+        let cf = T::cf(&self.db.cf);
         self.batch
-            .delete_range_cf(cf, serialize(&from), serialize(&to));
+            .put_cf(cf, serialize(key.key()), serialize(value));
     }
 
     #[inline(always)]
-    pub fn push<K, I: serde::Serialize>(&mut self, key: K, value: &I)
-    where
-        K: DbWriteKey<Vec<I>> + serde::Serialize,
+    pub fn delete<
+        K: serde::Serialize + serde::de::DeserializeOwned,
+        V: serde::Serialize + serde::de::DeserializeOwned,
+        T,
+    >(
+        &mut self,
+        key: T,
+    ) where
+        T: DbWriteKey<K, V>,
     {
-        let cf = K::cf(&self.db.cf);
-        self.batch.merge_cf(cf, serialize(&key), serialize(value));
+        let cf = T::cf(&self.db.cf);
+        self.batch.delete_cf(cf, serialize(key.key()));
+    }
+
+    #[inline(always)]
+    pub fn delete_range<
+        K: serde::Serialize + serde::de::DeserializeOwned,
+        V: serde::Serialize + serde::de::DeserializeOwned,
+        T,
+    >(
+        &mut self,
+        from: T,
+        to: T,
+    ) where
+        T: DbWriteKey<K, V>,
+    {
+        let cf = T::cf(&self.db.cf);
+        self.batch
+            .delete_range_cf(cf, serialize(from.key()), serialize(to.key()));
+    }
+
+    #[inline(always)]
+    pub fn push<
+        K: serde::Serialize + serde::de::DeserializeOwned,
+        I: serde::Serialize + serde::de::DeserializeOwned,
+        T,
+    >(
+        &mut self,
+        key: T,
+        value: &I,
+    ) where
+        T: DbWriteKey<K, Vec<I>>,
+    {
+        let cf = T::cf(&self.db.cf);
+        self.batch
+            .merge_cf(cf, serialize(key.key()), serialize(value));
     }
 
     /// Perform the atomic batch write.

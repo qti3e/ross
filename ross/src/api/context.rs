@@ -21,7 +21,7 @@ impl<'a> Context<'a> {
 
     /// Returns the snapshot of a commit.
     #[inline]
-    pub fn checkout(&self, commit: CommitIdentifier) -> Result<State> {
+    pub fn checkout(&self, commit: &CommitIdentifier) -> Result<State> {
         match self
             .db
             .get(keys::CommitSnapshot(commit))?
@@ -29,7 +29,7 @@ impl<'a> Context<'a> {
         {
             SnapshotEntry::Snapshot(state) => Ok(state),
             SnapshotEntry::Delta { base, delta } => {
-                let mut state = self.checkout(base)?;
+                let mut state = self.checkout(&base)?;
                 state.apply_delta_trusted(delta);
                 Ok(state)
             }

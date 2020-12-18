@@ -1,5 +1,4 @@
-use super::{context, Context};
-use crate::db::keys;
+use super::Context;
 use crate::error::*;
 use crate::types::*;
 use crossbeam::sync::ShardedLock;
@@ -23,12 +22,28 @@ impl<'a> Editor<'a> {
         }
 
         match &self.target {
-            BranchOrMergeBranchId::MergeBranch(id) => {}
-            BranchOrMergeBranchId::Branch(id) => {}
+            BranchOrMergeBranchId::Branch(id) => {
+                open_branch(self.context, id)?;
+            }
+            BranchOrMergeBranchId::MergeBranch(id) => {
+                open_merge_branch(self.context, id)?;
+            }
         }
 
         Ok(())
     }
 
     pub fn perform(&mut self, user: &UserId, patch: Patch) {}
+}
+
+#[inline(always)]
+fn open_branch(ctx: &Context, id: &BranchIdentifier) -> Result<()> {
+    // let data = ctx.db.get(keys::Branch(id))?;
+
+    Ok(())
+}
+
+#[inline(always)]
+fn open_merge_branch(ctx: &Context, id: &MergeBranchId) -> Result<()> {
+    Ok(())
 }

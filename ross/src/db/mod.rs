@@ -2,6 +2,9 @@
 mod macros;
 mod bincode;
 
+mod iterator;
+pub use iterator::*;
+
 mod batch;
 pub use batch::*;
 
