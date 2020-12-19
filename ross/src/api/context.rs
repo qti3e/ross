@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 
 pub struct Context<'a> {
     pub(super) db: DB,
-    editors: Mutex<TTLMap<BranchOrMergeBranchId, EditorSync<'a>>>,
+    editors: Mutex<TTLMap<BranchIdentifier, EditorSync<'a>>>,
 }
 
 impl<'a> Context<'a> {
@@ -40,7 +40,7 @@ impl<'a> Context<'a> {
     /// to edit/see a branch.
     pub fn open_session(
         &'a self,
-        target: BranchOrMergeBranchId,
+        target: BranchIdentifier,
         user: Option<UserId>,
     ) -> Result<Session<'a>> {
         let editor = {
