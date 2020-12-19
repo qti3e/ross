@@ -1,14 +1,14 @@
-use super::{Editor, EditorSync, Session};
+use super::{Editor, EditorBox, EditorLock, Session};
 use crate::db::{keys, DB};
 use crate::error::*;
 use crate::types::*;
+use crate::utils::clock::now;
 use crate::utils::ttl_map::TTLMap;
-use crossbeam::sync::ShardedLock;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 
 pub struct Context<'a> {
     pub(super) db: DB,
-    editors: Mutex<TTLMap<BranchIdentifier, EditorSync<'a>>>,
+    editors: Mutex<TTLMap<BranchIdentifier, EditorLock<'a>>>,
 }
 
 impl<'a> Context<'a> {
@@ -53,21 +53,31 @@ impl<'a> Context<'a> {
                     target,
                     data: None,
                 };
-                Ok(Arc::new(ShardedLock::new(editor)))
+                Ok(EditorLock::new(editor))
             })?;
-            Arc::clone(editor)
+            editor.clone()
         };
 
         // If it's the first time we're accessing this editor, call the open.
         // 2 = in ttl_map + current reference (`editor`).
-        if Arc::strong_count(&editor) == 2 {
+        if editor.strong_count() == 2 {
             editor
                 .write()
                 .map_err(|_| Error::AcquireWriteLock)?
                 .open()?;
         }
 
-        Ok(Session { editor, user })
+        Ok(Session {
+            editor: EditorBox::new(editor),
+            user,
+        })
+    }
+
+    #[inline]
+    pub(super) fn drop_editor(&self, target: BranchIdentifier) {
+        if let Ok(mut editors) = self.editors.lock() {
+            editors.drop_item(target, now());
+        }
     }
 }
 

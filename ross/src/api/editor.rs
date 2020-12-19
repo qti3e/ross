@@ -2,10 +2,6 @@ use super::Context;
 use crate::db::keys;
 use crate::error::*;
 use crate::types::*;
-use crossbeam::sync::ShardedLock;
-use std::sync::Arc;
-
-pub type EditorSync<'a> = Arc<ShardedLock<Editor<'a>>>;
 
 pub struct Editor<'a> {
     pub(super) context: &'a Context<'a>,
