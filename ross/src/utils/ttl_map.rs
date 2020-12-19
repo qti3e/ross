@@ -21,7 +21,7 @@ struct Entry<V> {
     expiration: Option<clock::Timestamp>,
 }
 
-impl<K: Copy + Hash + Eq, V: Clone> TTLMap<K, V> {
+impl<K: Copy + Hash + Eq, V> TTLMap<K, V> {
     pub fn new(capacity: usize, ttl: clock::Timestamp) -> Self {
         TTLMap {
             data: HashMap::with_capacity(capacity + 1),
@@ -77,7 +77,7 @@ impl<K: Copy + Hash + Eq, V: Clone> TTLMap<K, V> {
     /// Set an expiration date on the key, we will wait at least until the expiration
     /// time to actually drop the content.
     #[inline]
-    pub fn drop(&mut self, key: K, now: clock::Timestamp) {
+    pub fn drop_item(&mut self, key: K, now: clock::Timestamp) {
         if self.ttl == 0 {
             if let Some(entry) = self.data.remove(&key) {
                 if let Some(e) = entry.expiration {
@@ -213,10 +213,10 @@ mod test {
         map.get_or_maybe_insert_with(2, || -> Result<i32, MapError> { Ok(10) })
             .unwrap();
         // Time = 1
-        map.drop(0, 1);
+        map.drop_item(0, 1);
         assert_eq!(map.len(), 3);
         // Time = 2
-        map.drop(1, 2);
+        map.drop_item(1, 2);
         assert_eq!(map.contains_key(&0), false);
         assert_eq!(map.contains_key(&1), true);
         assert_eq!(map.contains_key(&2), true);

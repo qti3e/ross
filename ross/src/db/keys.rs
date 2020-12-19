@@ -14,21 +14,16 @@ db_schema!((DbKey, DbWriteKey, DbReadKey) {
     },
     /// Store information regarding each branch.
     cf BRANCHES(Branch:BranchIdentifier) -> BranchInfo {},
-    /// Column family used to store merge-branches.
-    cf MERGE_BRANCHES(MergeBranch:MergeBranchId) -> MergeBranchInfo {
-        /// Used to check if a merge branch exists, without the deserializing cost.
-        MergeBranchExists -> ();
-    },
     /// Map each commit identifier to the commit data.
     cf COMMITS(Commit:CommitIdentifier) -> CommitInfo {
         CommitOrigin -> CommitInfoOrigin;
     },
     /// Store a vector of live changes that are not yet committed.
-    cf LIVE_CHANGES(LiveChanges:BranchOrMergeBranchId) -> Vec<Patch> {},
+    cf LIVE_CHANGES(LiveChanges:BranchIdentifier) -> Vec<Patch> {},
     /// We only store a limited number of patches in LIVE_CHANGES, after a
     /// threshold we compute the delta of a branch/merge-branch to its original
     /// state and store that instead of all other patches.
-    cf PACKED_DELTA(PackedDelta:BranchOrMergeBranchId) -> Delta {},
+    cf PACKED_DELTA(PackedDelta:BranchIdentifier) -> Delta {},
     /// This column family is used to store the snapshot of each commit.
     cf SNAPSHOT(CommitSnapshot:CommitIdentifier) -> SnapshotEntry {}
 });

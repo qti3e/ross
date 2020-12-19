@@ -33,17 +33,6 @@ pub struct CommitIdentifier {
     pub has: CommitHash,
 }
 
-/// There can only be at most one merge-branch between two branches at any given time.
-/// It uses `BranchIdentifier` to make cross-repository merge-requests possible, also
-/// it is prefixed by the target's repository id, so when inserted in the database, it
-/// will be possible to get an iterator over all of the open (pending) merge requests
-/// of a repository using a rocksdb prefix-iterator.
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
-pub struct MergeBranchId {
-    pub target: BranchIdentifier,
-    pub source: BranchIdentifier,
-}
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RepositoryInfo {
     pub owner: UserId,
@@ -87,28 +76,17 @@ pub struct BranchInfo {
     pub title: String,
 }
 
-#[derive(Debug)]
-pub enum BranchModeAtom {
+#[derive(Debug, Serialize, Deserialize)]
+pub enum BranchMode {
+    Normal = 0,
     /// An static branch is a branch that cannot have live-changes and can therefore
     /// only be updated using merges.  
     /// As a usage we can point to `production` branch in a repository.
     Static = 1,
     /// An archived branch is a read-only branch, no further changes are allowed.
     Archived = 2,
-    /// Only the owner can write.
-    Private = 4,
-    /// Only people who already have the ID can see the repository.
-    Hidden = 8,
-}
-
-/// A bit-vector containing `BranchModeAtom`s.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct BranchMode(pub u8);
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct MergeBranchInfo {
-    pub lca: CommitIdentifier,
-    pub conflicts: Vec<MergeConflict>,
+    /// An archived branch that used to be static.
+    StaticArchived = 3,
 }
 
 /// Information about a commit that is enough to find the LCA.
@@ -130,23 +108,4 @@ pub struct CommitInfo {
     pub committer: UserId,
     pub authors: Vec<UserId>,
     pub message: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
-#[serde(untagged)]
-pub enum BranchOrMergeBranchId {
-    MergeBranch(MergeBranchId),
-    Branch(BranchIdentifier),
-}
-
-impl From<BranchIdentifier> for BranchOrMergeBranchId {
-    fn from(id: BranchIdentifier) -> Self {
-        BranchOrMergeBranchId::Branch(id)
-    }
-}
-
-impl From<MergeBranchId> for BranchOrMergeBranchId {
-    fn from(id: MergeBranchId) -> Self {
-        BranchOrMergeBranchId::MergeBranch(id)
-    }
 }

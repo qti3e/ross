@@ -30,9 +30,6 @@ impl DB {
                 rocksdb::ColumnFamilyDescriptor::new(keys::BRANCHES, {
                     rocksdb::Options::default()
                 }),
-                rocksdb::ColumnFamilyDescriptor::new(keys::MERGE_BRANCHES, {
-                    rocksdb::Options::default()
-                }),
                 rocksdb::ColumnFamilyDescriptor::new(keys::COMMITS, {
                     rocksdb::Options::default()
                 }),
