@@ -1,4 +1,4 @@
-use super::{Delta, DeltaEntry, Patch, PatchAtom, PatchConflict, PrimitiveValue};
+use super::{Delta, DeltaEntry, PatchAtom, PatchConflict, PrimitiveValue};
 use crate::utils::hash::Hash16;
 use serde::{Deserialize, Serialize};
 use std::collections::{hash_map::Entry, BTreeMap, HashMap};
@@ -74,17 +74,21 @@ impl State {
     /// ```
     /// On failure this method will return the list of `Conflict`s that prevented this
     /// patch to be applied.
-    pub fn perform(&mut self, patch: &Patch) -> Result<Delta, Vec<PatchConflict>> {
-        let mut revert_builder = RevertDeltaBuilder::with_capacity(patch.actions.len() / 2);
+    pub fn perform<P: IntoIterator<Item = PatchAtom>>(
+        &mut self,
+        patch: P,
+    ) -> Result<Delta, Vec<PatchConflict>> {
+        let iter = patch.into_iter();
+        let mut revert_builder = RevertDeltaBuilder::with_capacity(iter.size_hint().0 / 2);
         let mut perform = true; // basically `conflicts.len() == 0`.
         let mut conflicts = Vec::new();
 
-        for atom in &patch.actions {
+        for atom in iter {
             match atom {
                 PatchAtom::Touch { oid } => {
-                    match self.objects.get_mut(oid) {
+                    match self.objects.get_mut(&oid) {
                         Some(obj) if perform => {
-                            if revert_builder.touch(*oid) {
+                            if revert_builder.touch(oid) {
                                 obj.version += 1;
                             }
                         }
@@ -92,19 +96,19 @@ impl State {
                         None => {
                             // Delete-Write
                             perform = false;
-                            conflicts.push(PatchConflict::DeleteWrite { oid: *oid });
+                            conflicts.push(PatchConflict::DeleteWrite { oid });
                         }
                     }
                 }
                 PatchAtom::Insert { oid, data, version } => {
-                    match self.objects.entry(*oid) {
+                    match self.objects.entry(oid) {
                         Entry::Occupied(_) => {
                             // ID-conflict.
                             perform = false;
-                            conflicts.push(PatchConflict::IdConflict { oid: *oid });
+                            conflicts.push(PatchConflict::IdConflict { oid });
                         }
                         Entry::Vacant(entry) => {
-                            if let Some(obj) = revert_builder.delete(*oid) {
+                            if let Some(obj) = revert_builder.delete(oid) {
                                 // don't trust the user in this case.
                                 entry.insert(obj);
                             } else {
@@ -117,15 +121,15 @@ impl State {
                     }
                 }
                 PatchAtom::Delete { oid, version } => {
-                    match self.objects.entry(*oid) {
-                        Entry::Occupied(entry) if &entry.get().version > version => {
+                    match self.objects.entry(oid) {
+                        Entry::Occupied(entry) if entry.get().version > version => {
                             // Write-Delete conflict.
                             perform = false;
-                            conflicts.push(PatchConflict::WriteDelete { oid: *oid });
+                            conflicts.push(PatchConflict::WriteDelete { oid });
                         }
                         Entry::Occupied(entry) if perform => {
                             let obj = entry.remove();
-                            revert_builder.insert(*oid, obj);
+                            revert_builder.insert(oid, obj);
                         }
                         _ => {}
                     }
@@ -136,14 +140,14 @@ impl State {
                     current,
                     target,
                 } => {
-                    match self.objects.get_mut(oid) {
+                    match self.objects.get_mut(&oid) {
                         Some(obj) => {
-                            match get_field(&obj.data, *field) {
-                                v if v == target => { /* Already there */ }
-                                v if v == current => {
+                            match get_field(&obj.data, field) {
+                                v if v == &target => { /* Already there */ }
+                                v if v == &current => {
                                     if perform {
-                                        let prev = set_field(&mut obj.data, *field, target.clone());
-                                        if revert_builder.set(*oid, *field, prev) {
+                                        let prev = set_field(&mut obj.data, field, target.clone());
+                                        if revert_builder.set(oid, field, prev) {
                                             obj.version += 1;
                                         }
                                     }
@@ -151,17 +155,14 @@ impl State {
                                 _ => {
                                     // Write-Write
                                     perform = false;
-                                    conflicts.push(PatchConflict::WriteWrite {
-                                        oid: *oid,
-                                        field: *field,
-                                    });
+                                    conflicts.push(PatchConflict::WriteWrite { oid, field });
                                 }
                             }
                         }
                         None => {
                             // Delete-Write
                             perform = false;
-                            conflicts.push(PatchConflict::DeleteWrite { oid: *oid });
+                            conflicts.push(PatchConflict::DeleteWrite { oid });
                         }
                     }
                 }
