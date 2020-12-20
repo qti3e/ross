@@ -29,7 +29,7 @@ where
 
 impl<'a, R> Drop for Session<'a, R> {
     fn drop(&mut self) {
-        if let Ok(mut editor) = self.editor.write().map_err(|_| Error::AcquireWriteLock) {
+        if let Ok(mut editor) = self.editor.write() {
             editor.unsubscribe(&self.handle);
         }
     }

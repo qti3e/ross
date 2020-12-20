@@ -77,7 +77,6 @@ impl<'a, R> Context<'a, R> {
     }
 }
 
-#[test]
 fn t() {
     use crate::utils::hash::Hash16;
     let ctx = Context::<()>::new("path-xxx");

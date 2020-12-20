@@ -27,10 +27,10 @@ pub struct BranchIdentifier {
 }
 
 /// A commit hash, prefixed by the repository id.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
 pub struct CommitIdentifier {
     pub repository: RepositoryId,
-    pub has: CommitHash,
+    pub hash: CommitHash,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -92,7 +92,7 @@ pub enum BranchMode {
 /// Information about a commit that is enough to find the LCA.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CommitInfoOrigin {
-    pub branch: BranchId,
+    pub branch: BranchIdentifier,
     pub fork_point: ForkPoint,
     pub order: u32,
 }
