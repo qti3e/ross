@@ -1,16 +1,14 @@
-use super::Context;
+use super::{Context, Recipient};
 use crate::db::keys;
 use crate::error::*;
 use crate::types::*;
 use std::collections::BTreeMap;
 
-pub type EditorSessionId = u16;
-
 pub struct Editor<'a, R> {
     pub(super) context: &'a Context<'a, R>,
     pub(super) target: BranchIdentifier,
-    sessions: BTreeMap<EditorSessionId, R>,
-    last_session_id: EditorSessionId,
+    recipients: BTreeMap<RecipientId, R>,
+    last_recipient_id: RecipientId,
     data: Option<EditorData>,
 }
 
@@ -21,14 +19,23 @@ pub struct EditorData {
     state: State,
 }
 
-impl<'a, R> Editor<'a, R> {
+/// An opaque type to represent a handle to a session, used in some methods
+/// and returned by others.
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct RecipientHandle(RecipientId);
+type RecipientId = u16;
+
+impl<'a, R> Editor<'a, R>
+where
+    R: Recipient,
+{
     #[inline]
     pub(super) fn new(context: &'a Context<'a, R>, target: BranchIdentifier) -> Self {
         Editor {
             context,
             target,
-            sessions: BTreeMap::new(),
-            last_session_id: 0,
+            recipients: BTreeMap::new(),
+            last_recipient_id: 0,
             data: None,
         }
     }
@@ -72,16 +79,24 @@ impl<'a, R> Editor<'a, R> {
         Ok(())
     }
 
-    pub fn connect(&mut self, sender: R) -> EditorSessionId {
-        let id = self.last_session_id;
-        self.last_session_id += 1;
-        self.sessions.insert(id, sender);
-        id
-    }
-
-    pub fn disconnect(&mut self, session_id: &EditorSessionId) {
-        self.sessions.remove(session_id);
+    /// Subscribe to the messages sent by the editor, this method will
+    /// return a `RecipientHandle` which can later be used to unsubscribe
+    /// from the editor.
+    #[inline]
+    pub fn subscribe(&mut self, recipient: R) -> RecipientHandle {
+        let id = self.last_recipient_id;
+        self.last_recipient_id += 1;
+        self.recipients.insert(id, recipient);
+        RecipientHandle(id)
     }
 
     pub fn perform(&mut self, user: &UserId, patch: Patch) {}
+}
+
+impl<'a, R> Editor<'a, R> {
+    /// Remove a recipient from the subscriptions.
+    #[inline]
+    pub fn unsubscribe(&mut self, session_handle: &RecipientHandle) {
+        self.recipients.remove(&session_handle.0);
+    }
 }

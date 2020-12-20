@@ -1,5 +1,5 @@
 //! Types related to the VCS functionality of ROSS.
-use super::{MergeConflict, Timestamp};
+use super::Timestamp;
 use crate::utils::hash::*;
 use serde::{Deserialize, Serialize};
 

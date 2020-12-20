@@ -7,7 +7,6 @@ use std::sync::{Arc, LockResult, TryLockResult};
 /// type are owned by the context, and they're stored in the ttl_map.  
 /// You should use [EditorBox](EditorBox) when exposing the editor via the
 /// public API.
-#[derive(Clone)]
 pub struct EditorLock<'a, R>(Arc<ShardedLock<Editor<'a, R>>>);
 
 impl<'a, R> EditorLock<'a, R> {
@@ -46,6 +45,13 @@ impl<'a, R> EditorLock<'a, R> {
     #[inline(always)]
     pub fn try_read(&self) -> TryLockResult<ShardedLockReadGuard<Editor<'a, R>>> {
         self.0.try_read()
+    }
+}
+
+impl<'a, R> Clone for EditorLock<'a, R> {
+    #[inline]
+    fn clone(&self) -> Self {
+        EditorLock(Arc::clone(&self.0))
     }
 }
 

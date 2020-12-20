@@ -1,4 +1,4 @@
-use super::{Editor, EditorBox, EditorLock, Session};
+use super::{Editor, EditorBox, EditorLock, Recipient, Session};
 use crate::db::{keys, DB};
 use crate::error::*;
 use crate::types::*;
@@ -45,7 +45,7 @@ impl<'a, R> Context<'a, R> {
         sender: R,
     ) -> Result<Session<'a, R>>
     where
-        R: Clone,
+        R: Recipient,
     {
         let editor = {
             // This code is placed in {} intentionally, we want to release the mutex
