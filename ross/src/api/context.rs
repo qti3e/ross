@@ -6,12 +6,12 @@ use crate::utils::clock::now;
 use crate::utils::ttl_map::TTLMap;
 use std::sync::Mutex;
 
-pub struct Context<'a> {
+pub struct Context<'a, R> {
     pub(super) db: DB,
-    editors: Mutex<TTLMap<BranchIdentifier, EditorLock<'a>>>,
+    editors: Mutex<TTLMap<BranchIdentifier, EditorLock<'a, R>>>,
 }
 
-impl<'a> Context<'a> {
+impl<'a, R> Context<'a, R> {
     pub fn new(path: &str) -> Self {
         Self {
             db: DB::open(path),
@@ -42,23 +42,22 @@ impl<'a> Context<'a> {
         &'a self,
         target: BranchIdentifier,
         user: Option<UserId>,
-    ) -> Result<Session<'a>> {
+        sender: R,
+    ) -> Result<Session<'a, R>>
+    where
+        R: Clone,
+    {
         let editor = {
             // This code is placed in {} intentionally, we want to release the mutex
             // as soon as possible.
             let mut editors = self.editors.lock().map_err(|_| Error::AcquireLock)?;
             let editor = editors.get_or_maybe_insert_with(target, || {
-                let editor = Editor {
-                    context: &self,
-                    target,
-                    data: None,
-                };
-                Ok(EditorLock::new(editor))
+                Ok(EditorLock::new(Editor::new(&self, target)))
             })?;
             editor.clone()
         };
 
-        // If it's the first time we're accessing this editor, call the open.
+        // If it' the first time we're accessing this editor, call the open.
         // 2 = in ttl_map + current reference (`editor`).
         if editor.strong_count() == 2 {
             editor
@@ -67,10 +66,7 @@ impl<'a> Context<'a> {
                 .open()?;
         }
 
-        Ok(Session {
-            editor: EditorBox::new(editor),
-            user,
-        })
+        Ok(Session::new(EditorBox::new(editor), user, sender)?)
     }
 
     #[inline]
@@ -84,7 +80,7 @@ impl<'a> Context<'a> {
 #[test]
 fn t() {
     use crate::utils::hash::Hash16;
-    let ctx = Context::new("path-xxx");
+    let ctx = Context::<()>::new("path-xxx");
     let s1 = ctx
         .open_session(
             BranchIdentifier {
@@ -93,6 +89,7 @@ fn t() {
             }
             .into(),
             None,
+            (),
         )
         .unwrap();
     let s2 = ctx
@@ -103,6 +100,7 @@ fn t() {
             }
             .into(),
             None,
+            (),
         )
         .unwrap();
 }

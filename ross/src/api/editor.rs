@@ -2,11 +2,16 @@ use super::Context;
 use crate::db::keys;
 use crate::error::*;
 use crate::types::*;
+use std::collections::BTreeMap;
 
-pub struct Editor<'a> {
-    pub(super) context: &'a Context<'a>,
+pub type EditorSessionId = u16;
+
+pub struct Editor<'a, R> {
+    pub(super) context: &'a Context<'a, R>,
     pub(super) target: BranchIdentifier,
-    pub(super) data: Option<EditorData>,
+    sessions: BTreeMap<EditorSessionId, R>,
+    last_session_id: EditorSessionId,
+    data: Option<EditorData>,
 }
 
 pub struct EditorData {
@@ -16,8 +21,18 @@ pub struct EditorData {
     state: State,
 }
 
-impl<'a> Editor<'a> {
-    /// Init the editor, by loading the data from the DB.
+impl<'a, R> Editor<'a, R> {
+    #[inline]
+    pub(super) fn new(context: &'a Context<'a, R>, target: BranchIdentifier) -> Self {
+        Editor {
+            context,
+            target,
+            sessions: BTreeMap::new(),
+            last_session_id: 0,
+            data: None,
+        }
+    }
+
     /// Init the editor, by loading the data from the DB.
     pub(super) fn open(&mut self) -> Result<()> {
         if self.data.is_some() {
@@ -55,6 +70,17 @@ impl<'a> Editor<'a> {
         });
 
         Ok(())
+    }
+
+    pub fn connect(&mut self, sender: R) -> EditorSessionId {
+        let id = self.last_session_id;
+        self.last_session_id += 1;
+        self.sessions.insert(id, sender);
+        id
+    }
+
+    pub fn disconnect(&mut self, session_id: &EditorSessionId) {
+        self.sessions.remove(session_id);
     }
 
     pub fn perform(&mut self, user: &UserId, patch: Patch) {}
