@@ -12,7 +12,7 @@ pub enum PrimitiveValue {
     U32(u32),
     Float(f64),
     Hash16(Hash16),
-    String(String),
+    String(Box<str>),
 }
 
 impl PartialEq<PrimitiveValue> for PrimitiveValue {
@@ -66,7 +66,14 @@ impl From<f64> for PrimitiveValue {
 impl From<String> for PrimitiveValue {
     #[inline]
     fn from(value: String) -> Self {
-        PrimitiveValue::String(value)
+        PrimitiveValue::String(value.into())
+    }
+}
+
+impl From<&str> for PrimitiveValue {
+    #[inline]
+    fn from(value: &str) -> Self {
+        PrimitiveValue::String(value.into())
     }
 }
 
@@ -173,9 +180,9 @@ impl<'de> Deserialize<'de> for PrimitiveValue {
             }
 
             if let Ok(ok) = Result::map(
-                <String as Deserialize>::deserialize(serde::private::de::ContentRefDeserializer::<
-                    D::Error,
-                >::new(&content)),
+                <Box<str> as Deserialize>::deserialize(
+                    serde::private::de::ContentRefDeserializer::<D::Error>::new(&content),
+                ),
                 PrimitiveValue::String,
             ) {
                 return Ok(ok);
@@ -305,7 +312,7 @@ impl<'de> Deserialize<'de> for PrimitiveValue {
                             PrimitiveValue::Hash16,
                         ),
                         (Field::field6, variant) => Result::map(
-                            serde::de::VariantAccess::newtype_variant::<String>(variant),
+                            serde::de::VariantAccess::newtype_variant::<Box<str>>(variant),
                             PrimitiveValue::String,
                         ),
                     }
