@@ -1,4 +1,4 @@
-use super::{Context, Recipient};
+use super::{Context, EditorMessage, Recipient};
 use crate::db::keys;
 use crate::error::*;
 use crate::types::*;
@@ -88,6 +88,27 @@ where
         self.last_recipient_id += 1;
         self.recipients.insert(id, recipient);
         RecipientHandle(id)
+    }
+
+    /// Broadcast the given message to all of the recipients.
+    fn broadcast(&mut self, message: EditorMessage, skip_id: Option<RecipientId>) {
+        // Don't bother serializing if we're not going to send the message.
+        let data = match (self.recipients.len(), skip_id) {
+            (0, _) => return,
+            (1, Some(id)) if self.recipients.contains_key(&id) => return,
+            _ => R::serialize(&message),
+        };
+        for (id, rec) in &mut self.recipients {
+            match &skip_id {
+                Some(r_id) if r_id != id => {
+                    rec.send(&data);
+                }
+                None => {
+                    rec.send(&data);
+                }
+                _ => {}
+            }
+        }
     }
 
     pub fn perform(&mut self, user: &UserId, patch: Patch) {}
