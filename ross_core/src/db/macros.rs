@@ -29,7 +29,7 @@ macro_rules! db_schema {
 
             /// Returns an iterator over all of the keys in the given database, that are
             /// of the same type as Self and start with the given prefix.
-            /// ```
+            /// ```ignore
             /// let db = DB::open("/tmp");
             /// let iter = keys::Branch::key_iterator(&db, &[]);
             /// for branch_id in iter { }
@@ -46,7 +46,7 @@ macro_rules! db_schema {
 
             /// Returns an iterator over all of the key-value pairs in the given database that are
             /// of the same type as Self and their key starts with the given prefix.
-            /// ```
+            /// ```ignore
             /// let db = DB::open("/tmp");
             /// let iter = keys::Branch::key_value_iterator(&db, &[]);
             /// for (branch_id, branch_info) in iter { }
